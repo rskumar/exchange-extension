@@ -1,1 +1,12 @@
 target/
+*.classpath
+*.classpath
+*.classpath
+*.classpath
+*.project
+*.project
+*.project
+*.project
+rebel-remote.xml
+rebel.xml
+/packaging/bin
