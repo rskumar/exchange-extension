@@ -13,6 +13,7 @@ import microsoft.exchange.webservices.data.AppointmentSchema;
 import microsoft.exchange.webservices.data.Attachment;
 import microsoft.exchange.webservices.data.Attendee;
 import microsoft.exchange.webservices.data.BasePropertySet;
+import microsoft.exchange.webservices.data.ExtendedProperty;
 import microsoft.exchange.webservices.data.FileAttachment;
 import microsoft.exchange.webservices.data.OccurrenceInfo;
 import microsoft.exchange.webservices.data.OccurrenceInfoCollection;
@@ -27,9 +28,11 @@ import microsoft.exchange.webservices.data.Sensitivity;
 import microsoft.exchange.webservices.data.ServiceLocalException;
 import microsoft.exchange.webservices.data.ServiceVersionException;
 
+import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.EventCategory;
+import org.exoplatform.commons.utils.ByteArrayOutput;
 import org.exoplatform.extension.exchange.listener.ExchangeListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -62,7 +65,6 @@ public class CalendarConverterService {
     event.setLastUpdatedTime(appointment.getLastModifiedTime());
     event.setSummary(appointment.getSubject());
     setStatus(event, appointment);
-    setAttachements(event, appointment);
     setDates(event, appointment);
     setPriority(event, appointment);
     setEventCategory(event, appointment, username, calendarService);
@@ -72,6 +74,7 @@ public class CalendarConverterService {
     } else {
       event.setPrivate(false);
     }
+    setAttachements(event, appointment);
     // This have to be last thing to load because of BAD EWS API impl
     appointment.load(new PropertySet(AppointmentSchema.Body));
     event.setDescription(appointment.getBody().toString());
@@ -341,9 +344,11 @@ public class CalendarConverterService {
           if (fileAttachment.getSize() == 0) {
             continue;
           }
-          eXoAttachment.setInputStream(new ByteArrayInputStream(fileAttachment.getContent()));
+          ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+          fileAttachment.load(outputStream);
+          eXoAttachment.setInputStream(new ByteArrayInputStream(outputStream.toByteArray()));
           eXoAttachment.setMimeType(fileAttachment.getContentType());
-          eXoAttachment.setName(fileAttachment.getFileName());
+          eXoAttachment.setName(fileAttachment.getName());
           eXoAttachment.setSize(fileAttachment.getSize());
           Calendar calendar = Calendar.getInstance();
           calendar.setTime(fileAttachment.getLastModifiedTime());
@@ -356,17 +361,17 @@ public class CalendarConverterService {
   }
 
   private static void setStatus(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
-    if (appointment.getAppointmentState() != null) {
-      switch (appointment.getAppointmentState()) {
-      case 1:
+    if (appointment.getLegacyFreeBusyStatus() != null) {
+      switch (appointment.getLegacyFreeBusyStatus()) {
+      case Free:
         calendarEvent.setStatus(CalendarEvent.ST_AVAILABLE);
         calendarEvent.setEventState(CalendarEvent.ST_AVAILABLE);
         break;
-      case 3:
+      case Busy:
         calendarEvent.setStatus(CalendarEvent.ST_BUSY);
         calendarEvent.setEventState(CalendarEvent.ST_BUSY);
         break;
-      case 4:
+      case OOF:
         calendarEvent.setStatus(CalendarEvent.ST_OUTSIDE);
         calendarEvent.setEventState(CalendarEvent.ST_OUTSIDE);
         break;
