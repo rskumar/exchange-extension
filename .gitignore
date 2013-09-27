@@ -10,3 +10,4 @@ target/
 rebel-remote.xml
 rebel.xml
 /packaging/bin
+.settings

@@ -13,11 +13,12 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
 
   private static final Log LOG = ExoLogger.getLogger(ExchangeIntegrationLoginModule.class);
 
-  ExchangeListenerService exchangeListenerService;
+  private ExchangeListenerService exchangeListenerService;
+  private String username = null;
 
   public ExchangeIntegrationLoginModule() {
     try {
-      this.exchangeListenerService  = (ExchangeListenerService) getContainer().getComponentInstanceOfType(ExchangeListenerService.class);
+      this.exchangeListenerService = (ExchangeListenerService) getContainer().getComponentInstanceOfType(ExchangeListenerService.class);
     } catch (Exception e) {
       LOG.error(e);
     }
@@ -30,7 +31,7 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
     callbacks[1] = new PasswordCallback("Password", false);
     try {
       callbackHandler.handle(callbacks);
-      String username = ((NameCallback) callbacks[0]).getName();
+      username = ((NameCallback) callbacks[0]).getName();
       String password = new String(((PasswordCallback) callbacks[1]).getPassword());
       if (username == null || username.isEmpty()) {
         // Let other login modules handle this
@@ -42,7 +43,7 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
       }
       exchangeListenerService.userLoggedIn(username, password);
     } catch (Exception e) {
-      LOG.error(e);
+      getLogger().error(e);
     }
     // Let other login modules run
     return true;
@@ -60,6 +61,9 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
 
   @Override
   public boolean logout() throws LoginException {
+    if (username != null) {
+      exchangeListenerService.userLoggedOut(username);
+    }
     return false;
   }
 

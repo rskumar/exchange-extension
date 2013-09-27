@@ -2,6 +2,8 @@ package org.exoplatform.extension.exchange.service;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 
 import microsoft.exchange.webservices.data.Appointment;
@@ -22,38 +24,97 @@ public class CalendarStorageService implements Serializable {
     this.calendarService = calendarService;
   }
 
-  public void deleteEvent(String appointmentId, String folderId, String username) throws Exception {
+  /**
+   * 
+   * Deletes eXo Calendar Event.
+   * 
+   * @param appointmentId
+   * @param folderId
+   * @param username
+   * @throws Exception
+   */
+  protected void deleteEvent(String appointmentId, String folderId, String username) throws Exception {
     CalendarEvent calendarEvent = getEventByAppointmentId(username, appointmentId);
     if (calendarEvent != null) {
       deleteEvent(calendarEvent, folderId, username);
     }
   }
 
-  public void deleteEvent(CalendarEvent calendarEvent, String folderId, String username) throws Exception {
-    Calendar calendar = findUserCalendar(username, folderId);
+  /**
+   * 
+   * Deletes eXo Calendar Event.
+   * 
+   * @param calendarEvent
+   * @param folderId
+   * @param username
+   * @throws Exception
+   */
+  protected void deleteEvent(CalendarEvent calendarEvent, String folderId, String username) throws Exception {
+    Calendar calendar = getUserCalendar(username, folderId);
     calendarService.removeUserEvent(username, calendar.getId(), calendarEvent.getId());
   }
 
-  public void createOrUpdateEvent(Appointment appointment, Folder folder, String username) throws Exception {
+  /**
+   * 
+   * Creates or updates eXo Calendar Event.
+   * 
+   * @param appointment
+   * @param folder
+   * @param username
+   * @throws Exception
+   */
+  protected void createOrUpdateEvent(Appointment appointment, Folder folder, String username) throws Exception {
     CalendarEvent calendarEvent = getEventByAppointmentId(username, appointment.getId().getUniqueId());
     boolean isNew = (calendarEvent == null);
     createOrUpdateEvent(appointment, folder, username, isNew);
   }
 
-  protected void updateEvent(Appointment appointment, Folder forlder, String username) throws Exception {
-    createOrUpdateEvent(appointment, forlder, username, false);
+  /**
+   * 
+   * Delete eXo Calendar.
+   * 
+   * @param username
+   * @param folderId
+   * @return
+   * @throws Exception
+   */
+  protected boolean deleteCalendar(String username, String folderId) throws Exception {
+    Calendar calendar = calendarService.removeUserCalendar(username, CalendarConverterService.getCalendarId(folderId));
+    if (calendar != null) {
+      Log.info("User Calendar" + calendar.getId() + " is deleted, because it was deleted from Exchange.");
+    }
+    return false;
   }
 
-  protected void createEvent(Appointment appointment, Folder forlder, String username) throws Exception {
-    createOrUpdateEvent(appointment, forlder, username, true);
+  /**
+   * 
+   * Gets User Calendar identified by Exchange folder Id.
+   * 
+   * @param username
+   * @param folderId
+   * @return
+   * @throws Exception
+   */
+  protected Calendar getUserCalendar(String username, String folderId) throws Exception {
+    return calendarService.getUserCalendar(username, CalendarConverterService.getCalendarId(folderId));
   }
 
-  public Calendar getOrCreateUserCalendar(String username, Folder forlder) throws Exception {
-    Calendar calendar = findUserCalendar(username, forlder.getId().getUniqueId());
+  /**
+   * 
+   * Gets User Calendar identified by Exchange folder Id, or creates it if not
+   * existing.
+   * 
+   * @param username
+   * @param folderId
+   * @return
+   * @throws Exception
+   */
+  protected Calendar getOrCreateUserCalendar(String username, Folder folder) throws Exception {
+    Calendar calendar = getUserCalendar(username, folder.getId().getUniqueId());
     if (calendar == null) {
       calendar = new Calendar();
-      calendar.setId(CalendarConverterService.getCalendarId(username, forlder.getId().getUniqueId()));
-      calendar.setName(CalendarConverterService.getCalendarName(forlder.getDisplayName()));
+      calendar.setId(CalendarConverterService.getCalendarId(folder.getId().getUniqueId()));
+      calendar.setName(CalendarConverterService.getCalendarName(folder.getDisplayName()));
       calendar.setCalendarOwner(username);
       calendar.setDataInit(false);
       calendar.setEditPermission(new String[] { "any read" });
@@ -63,14 +124,19 @@ public class CalendarStorageService implements Serializable {
     return calendar;
   }
 
-  public Calendar findUserCalendar(String username, String folderId) throws Exception {
-    return calendarService.getUserCalendar(username, CalendarConverterService.getCalendarId(username, folderId));
-  }
-
-  public List<CalendarEvent> findUserCalendarEvents(String username, String folderId) throws Exception {
+  /**
+   * 
+   * Gets Events from User Calendar identified by Exchange folder Id.
+   * 
+   * @param username
+   * @param folderId
+   * @return
+   * @throws Exception
+   */
+  protected List<CalendarEvent> getUserCalendarEvents(String username, String folderId) throws Exception {
     List<CalendarEvent> userEvents = null;
-    String calendarId = CalendarConverterService.getCalendarId(username, folderId);
-    Calendar calendar = calendarService.getUserCalendar(username, CalendarConverterService.getCalendarId(username, folderId));
+    String calendarId = CalendarConverterService.getCalendarId(folderId);
+    Calendar calendar = calendarService.getUserCalendar(username, CalendarConverterService.getCalendarId(folderId));
     if (calendar != null) {
       List<String> calendarIds = new ArrayList<String>();
       calendarIds.add(calendarId);
@@ -79,15 +145,67 @@ public class CalendarStorageService implements Serializable {
     return userEvents;
   }
 
-  private void createOrUpdateEvent(Appointment appointment, Folder forlder, String username, boolean isNew) throws Exception {
-    Calendar calendar = getOrCreateUserCalendar(username, forlder);
+  /**
+   * 
+   * Updates existing eXo Calendar Event.
+   * 
+   * @param appointment
+   * @param folder
+   * @param username
+   * @throws Exception
+   */
+  protected void updateEvent(Appointment appointment, Folder folder, String username) throws Exception {
+    createOrUpdateEvent(appointment, folder, username, false);
+  }
+
+  /**
+   * 
+   * Create non existing eXo Calendar Event.
+   * 
+   * @param appointment
+   * @param folder
+   * @param username
+   * @throws Exception
+   */
+  protected void createEvent(Appointment appointment, Folder folder, String username) throws Exception {
+    createOrUpdateEvent(appointment, folder, username, true);
+  }
+
+  /**
+   * 
+   * Search for existing calendars in eXo but not in Exchange.
+   * 
+   * @param username
+   * @param folderIds
+   * @throws Exception
+   */
+  protected void deleteUnregisteredExchangeCalendars(String username, List<String> folderIds) throws Exception {
+    List<String> registeredCalendarIds = new ArrayList<String>();
+    for (String folderId : folderIds) {
+      registeredCalendarIds.add(CalendarConverterService.getCalendarId(folderId));
+    }
+
+    List<Calendar> calendars = calendarService.getUserCalendars(username, true);
+    Iterator<Calendar> iterator = calendars.iterator();
+    while (iterator.hasNext()) {
+      Calendar calendar = (Calendar) iterator.next();
+      String calendarId = calendar.getId();
+      if (CalendarConverterService.isExchangeCalendarId(calendarId) && !registeredCalendarIds.contains(calendarId)) {
+        calendarService.removeUserCalendar(username, calendarId);
+        Log.info("User Calendar '" + calendarId + "' is deleted, because it was deleted from Exchange.");
+      }
+    }
+  }
+
+  private void createOrUpdateEvent(Appointment appointment, Folder folder, String username, boolean isNew) throws Exception {
+    Calendar calendar = getOrCreateUserCalendar(username, folder);
 
     if (appointment.getAppointmentType() != null) {
       switch (appointment.getAppointmentType()) {
       case Single: {
         CalendarEvent event = new CalendarEvent();
         event.setCalendarId(calendar.getId());
-        event.setId(CalendarConverterService.getEventId(username, appointment.getId().getUniqueId()));
+        event.setId(CalendarConverterService.getEventId(appointment.getId().getUniqueId()));
         CalendarConverterService.convertSingleCalendarEvent(event, appointment, username, calendarService);
         event.setRepeatType(CalendarEvent.RP_NOREPEAT);
         calendarService.saveUserEvent(username, calendar.getId(), event, isNew);
@@ -99,34 +217,35 @@ public class CalendarStorageService implements Serializable {
         break;
       case RecurringMaster: {
         // Master recurring event
-        CalendarEvent oldMasterEvent = null, masterEvent = null;
+        CalendarEvent masterEvent = null;
+        Date orginialStartDate = null;
         if (isNew) {
           masterEvent = new CalendarEvent();
         } else {
           masterEvent = getEventByAppointmentId(username, appointment.getId().getUniqueId());
-          oldMasterEvent = new CalendarEvent(masterEvent);
+          orginialStartDate = masterEvent.getFromDateTime();
         }
         masterEvent.setCalendarId(calendar.getId());
         CalendarConverterService.convertMasterRecurringCalendarEvent(masterEvent, appointment, username, calendarService);
         if (isNew) {
           calendarService.saveUserEvent(username, calendar.getId(), masterEvent, isNew);
         } else {
-          if (!isNew && !CalendarConverterService.isSameDate(oldMasterEvent.getFromDateTime(), masterEvent.getFromDateTime())) {
+          if (!isNew && !CalendarConverterService.isSameDate(orginialStartDate, masterEvent.getFromDateTime())) {
             masterEvent.setExcludeId(new String[0]);
           }
           calendarService.saveUserEvent(username, calendar.getId(), masterEvent, isNew);
         }
-        List<CalendarEvent> listEvent = new ArrayList<CalendarEvent>();
-        List<CalendarEvent> toDeleteEvents = CalendarConverterService.convertExceptionOccurencesOfRecurringEvent(masterEvent, listEvent, appointment, username, calendarService);
-        if (listEvent != null && !listEvent.isEmpty()) {
-          calendarService.updateOccurrenceEvent(calendar.getId(), calendar.getId(), masterEvent.getCalType(), masterEvent.getCalType(), listEvent, username);
+        List<CalendarEvent> exceptionalEventsToUpdate = new ArrayList<CalendarEvent>();
+        // Deleted execptional occurences events.
+        List<CalendarEvent> toDeleteEvents = CalendarConverterService.convertExceptionOccurencesOfRecurringEvent(masterEvent, exceptionalEventsToUpdate, appointment, username, calendarService);
+        if (exceptionalEventsToUpdate != null && !exceptionalEventsToUpdate.isEmpty()) {
+          calendarService.updateOccurrenceEvent(calendar.getId(), calendar.getId(), masterEvent.getCalType(), masterEvent.getCalType(), exceptionalEventsToUpdate, username);
         }
         if (toDeleteEvents != null && !toDeleteEvents.isEmpty()) {
           for (CalendarEvent calendarEvent : toDeleteEvents) {
             calendarService.removeUserEvent(username, calendar.getId(), calendarEvent.getId());
             // Only if dates was modified
-            if (!isNew && !CalendarConverterService.isSameDate(oldMasterEvent.getFromDateTime(), masterEvent.getFromDateTime()) && masterEvent.getExcludeId() != null
-                && masterEvent.getExcludeId().length > 0) {
+            if (!isNew && !CalendarConverterService.isSameDate(orginialStartDate, masterEvent.getFromDateTime()) && masterEvent.getExcludeId() != null && masterEvent.getExcludeId().length > 0) {
               String[] occIds = masterEvent.getExcludeId();
               List<String> newOccIds = new ArrayList<String>();
               for (String occId : occIds) {
@@ -150,7 +269,7 @@ public class CalendarStorageService implements Serializable {
   }
 
   private CalendarEvent getEventByAppointmentId(String username, String appointmentId) throws Exception {
-    String calEventId = CalendarConverterService.getEventId(username, appointmentId);
+    String calEventId = CalendarConverterService.getEventId(appointmentId);
     return calendarService.getEvent(username, calEventId);
   }
 

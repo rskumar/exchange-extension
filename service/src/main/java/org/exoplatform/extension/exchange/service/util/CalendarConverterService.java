@@ -38,11 +38,14 @@ public class CalendarConverterService {
 
   private final static Log LOG = ExoLogger.getLogger(ExchangeListenerService.class);
 
-  public static final String EXCHANGE_CALENDAR_NAME = "EXCH";
+  public static final String EXCHANGE_CALENDAR_NAME_PREFIX = "EXCH";
+  public static final String EXCHANGE_CALENDAR_ID_PREFIX = "EXCH";
 
   public static final SimpleDateFormat recurrenceIdFormat = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
 
   /**
+   * 
+   * Converts from Exchange Calendar Event to eXo Calendar Event.
    * 
    * @param event
    * @param appointment
@@ -51,7 +54,7 @@ public class CalendarConverterService {
    * @throws Exception
    */
   public static void convertSingleCalendarEvent(CalendarEvent event, Appointment appointment, String username, CalendarService calendarService) throws Exception {
-    event.setId(getEventId(username, appointment.getId().getUniqueId()));
+    event.setId(getEventId(appointment.getId().getUniqueId()));
     event.setMessage(appointment.getId().getUniqueId());
     event.setEventType(CalendarEvent.TYPE_EVENT);
     event.setCalType("" + org.exoplatform.calendar.service.Calendar.TYPE_PRIVATE);
@@ -74,6 +77,17 @@ public class CalendarConverterService {
     event.setDescription(appointment.getBody().toString());
   }
 
+  /**
+   * 
+   * Converts from Exchange Calendar Recurring Master Event to eXo Calendar
+   * Event.
+   * 
+   * @param event
+   * @param appointment
+   * @param username
+   * @param calendarService
+   * @throws Exception
+   */
   public static void convertMasterRecurringCalendarEvent(CalendarEvent event, Appointment appointment, String username, CalendarService calendarService) throws Exception {
     convertSingleCalendarEvent(event, appointment, username, calendarService);
     appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.Recurrence));
@@ -100,6 +114,19 @@ public class CalendarConverterService {
     }
   }
 
+  /**
+   * 
+   * Converts from Exchange Calendar Exceptional Occurence Event to eXo Calendar
+   * Event.
+   * 
+   * @param masterEvent
+   * @param listEvent
+   * @param masterAppointment
+   * @param username
+   * @param calendarService
+   * @return
+   * @throws Exception
+   */
   public static List<CalendarEvent> convertExceptionOccurencesOfRecurringEvent(CalendarEvent masterEvent, List<CalendarEvent> listEvent, Appointment masterAppointment, String username,
       CalendarService calendarService) throws Exception {
     masterAppointment = Appointment.bind(masterAppointment.getService(), masterAppointment.getId(), new PropertySet(AppointmentSchema.ModifiedOccurrences));
@@ -128,18 +155,68 @@ public class CalendarConverterService {
     return calendarEvents;
   }
 
+  /**
+   * Converts Exchange Calendar Category Name to eXo Calendar Name
+   * 
+   * @param categoryName
+   * @return
+   */
+  private static String getCategoryName(String categoryName) {
+    return /* EXCHANGE_CALENDAR_NAME_PREFIX + "-" + */categoryName;
+  }
+
+  /**
+   * Converts Exchange Calendar Name to eXo Calendar Name by adding a prefix.
+   * 
+   * @param calendarName
+   * @return
+   */
   public static String getCalendarName(String calendarName) {
-    return EXCHANGE_CALENDAR_NAME + "-" + calendarName;
+    return EXCHANGE_CALENDAR_NAME_PREFIX + "-" + calendarName;
   }
 
-  public static String getCalendarId(String username, String folderId) {
-    return EXCHANGE_CALENDAR_NAME + "-" + folderId.hashCode();
+  /**
+   * 
+   * Converts Exchange Calendar Name to eXo Calendar Id by adding a prefix and
+   * hash coding the original Id.
+   * 
+   * @param folderId
+   * @return
+   */
+  public static String getCalendarId(String folderId) {
+    return EXCHANGE_CALENDAR_ID_PREFIX + "-" + folderId.hashCode();
   }
 
-  public static String getEventId(String username, String appointmentId) throws Exception {
+  /**
+   * 
+   * Checks if Passed eXo Calendar Id becomes from the synchronization with
+   * exchange, by testing if the prefix exists or not.
+   * 
+   * @param calendarId
+   * @return
+   */
+  public static boolean isExchangeCalendarId(String calendarId) {
+    return calendarId != null && calendarId.startsWith(EXCHANGE_CALENDAR_ID_PREFIX);
+  }
+
+  /**
+   * Converts Exchange Calendar Event Id to eXo Calendar Event Id
+   * 
+   * @param appointmentId
+   * @return
+   * @throws Exception
+   */
+  public static String getEventId(String appointmentId) throws Exception {
     return "ExcangeEvent-" + appointmentId.hashCode();
   }
 
+  /**
+   * Compares two dates.
+   * 
+   * @param value1
+   * @param value2
+   * @return true if same
+   */
   public static boolean isSameDate(Date value1, Date value2) {
     Calendar date1 = Calendar.getInstance();
     date1.setTime(value1);
@@ -148,7 +225,7 @@ public class CalendarConverterService {
     return isSameDate(date1, date2);
   }
 
-  public static boolean isSameDate(java.util.Calendar date1, java.util.Calendar date2) {
+  private static boolean isSameDate(java.util.Calendar date1, java.util.Calendar date2) {
     return (date1.get(java.util.Calendar.DATE) == date2.get(java.util.Calendar.DATE) && date1.get(java.util.Calendar.MONTH) == date2.get(java.util.Calendar.MONTH) && date1
         .get(java.util.Calendar.YEAR) == date2.get(java.util.Calendar.YEAR));
   }
@@ -174,12 +251,6 @@ public class CalendarConverterService {
     }
   }
 
-  /**
-   * 
-   * @param calendarEvent
-   * @param appointment
-   * @throws ServiceLocalException
-   */
   private static void setParticipants(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
     List<String> participants = new ArrayList<String>();
     if (appointment.getOptionalAttendees() != null) {
@@ -208,12 +279,6 @@ public class CalendarConverterService {
     }
   }
 
-  /**
-   * 
-   * @param calendarEvent
-   * @param appointment
-   * @throws ServiceLocalException
-   */
   private static void setPriority(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
     if (appointment.getImportance() != null) {
       // Transform index 1,2,3 => 3,2,1. See CalendarEvent.PRIORITY and
@@ -225,12 +290,6 @@ public class CalendarConverterService {
     }
   }
 
-  /**
-   * 
-   * @param calendarEvent
-   * @param appointment
-   * @throws ServiceLocalException
-   */
   private static void setDates(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
     calendarEvent.setFromDateTime(appointment.getStart());
     calendarEvent.setToDateTime(appointment.getEnd());
@@ -252,25 +311,16 @@ public class CalendarConverterService {
     }
   }
 
-  /**
-   * 
-   * @param calendarEvent
-   * @param appointment
-   * @param username
-   * @param calendarService
-   * @throws ServiceLocalException
-   * @throws Exception
-   */
   private static void setEventCategory(CalendarEvent calendarEvent, Appointment appointment, String username, CalendarService calendarService) throws ServiceLocalException, Exception {
     if (appointment.getCategories() != null && appointment.getCategories().getSize() > 0) {
       String categoryName = appointment.getCategories().getString(0);
       if (categoryName != null && !categoryName.isEmpty()) {
-        EventCategory category = calendarService.getEventCategoryByName(username, categoryName);
+        EventCategory category = calendarService.getEventCategoryByName(username, getCategoryName(categoryName));
         if (category == null) {
           category = new EventCategory();
           category.setDataInit(false);
-          category.setName(categoryName);
-          category.setId(EXCHANGE_CALENDAR_NAME + "-" + categoryName);
+          category.setName(getCategoryName(categoryName));
+          category.setId(getCategoryName(categoryName));
           calendarService.saveEventCategory(username, category, true);
         }
         calendarEvent.setEventCategoryId(category.getId());
@@ -279,14 +329,6 @@ public class CalendarConverterService {
     }
   }
 
-  /**
-   * 
-   * @param calendarEvent
-   * @param appointment
-   * @throws ServiceLocalException
-   * @throws ServiceVersionException
-   * @throws Exception
-   */
   private static void setAttachements(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException, ServiceVersionException, Exception {
     if (appointment.getHasAttachments()) {
       Iterator<Attachment> attachmentIterator = appointment.getAttachments().iterator();
@@ -313,12 +355,6 @@ public class CalendarConverterService {
     }
   }
 
-  /**
-   * 
-   * @param calendarEvent
-   * @param appointment
-   * @throws ServiceLocalException
-   */
   private static void setStatus(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
     if (appointment.getAppointmentState() != null) {
       switch (appointment.getAppointmentState()) {
@@ -337,4 +373,5 @@ public class CalendarConverterService {
       }
     }
   }
+
 }

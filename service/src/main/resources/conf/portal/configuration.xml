@@ -7,15 +7,15 @@
 		<init-params>
 			<value-param>
 				<name>exchange.ews.url</name>
-				<value>${exchange.ews.url:https://win-va6jepcgm4k/EWS/Exchange.asmx}</value>
+				<value>${exchange.ews.url:https://localhost/EWS/Exchange.asmx}</value>
 			</value-param>
 			<value-param>
 				<name>exchange.domain</name>
-				<value>${exchange.domain:test.local}</value>
+				<value>${exchange.domain:test.domain.local}</value>
 			</value-param>
 			<value-param>
-				<name>exchange.diff.time</name>
-				<value>${exchange.diff.time:-2}</value>
+				<name>exchange.scheduler.delay</name>
+				<value>${exchange.scheduler.delay:20}</value>
 			</value-param>
 		</init-params>
 	</component>
