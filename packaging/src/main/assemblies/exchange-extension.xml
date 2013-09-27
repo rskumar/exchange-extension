@@ -9,15 +9,6 @@
 	<includeBaseDirectory>false</includeBaseDirectory>
 	<dependencySets>
 		<dependencySet>
-			<outputDirectory>webapps</outputDirectory>
-			<includes>
-				<include>${project.groupId}:exchange-extension-configuration-webapp:war</include>
-			</includes>
-			<scope>provided</scope>
-			<outputFileNameMapping>exchange-extension.war</outputFileNameMapping>
-			<useProjectArtifact>false</useProjectArtifact>
-		</dependencySet>
-		<dependencySet>
 			<outputDirectory>lib</outputDirectory>
 			<includes>
 				<include>${project.groupId}:exchange-extension-*:jar</include>

@@ -8,7 +8,7 @@
 	</parent>
 	<groupId>org.exoplatform.extensions.exchange</groupId>
 	<artifactId>exchange-extension-parent</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>1.0-SNAPSHOT</version>
 	<packaging>pom</packaging>
 	<name>eXo Platform - addons - Exchange extension - parent</name>
 	<description>eXo Platform - addons - Exchange extension - parent</description>
@@ -83,7 +83,6 @@
 	</dependencyManagement>
 	<modules>
 		<module>service</module>
-		<module>extension</module>
 		<module>packaging</module>
 	</modules>
 </project>
