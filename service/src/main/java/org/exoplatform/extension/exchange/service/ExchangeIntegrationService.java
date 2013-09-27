@@ -68,8 +68,14 @@ public class ExchangeIntegrationService {
    * @param diffTimeZone
    * @throws Exception
    */
-  public void synchronizeFullCalendar(FolderId folderId) throws Exception {
-    CalendarFolder folder = CalendarFolder.bind(service, folderId);
+  public boolean synchronizeFullCalendar(FolderId folderId) throws Exception {
+    CalendarFolder folder = null;
+    try {
+      folder = CalendarFolder.bind(service, folderId);
+    } catch (ServiceResponseException e) {
+      LOG.warn("Can't get Folder identified by id: " + folderId.getUniqueId());
+      return false;
+    }
     calendarStorageService.getOrCreateUserCalendar(username, folder);
 
     Iterable<Item> items = searchAllAppointments(folderId);
@@ -80,6 +86,7 @@ public class ExchangeIntegrationService {
         LOG.warn("Item bound from exchange but not of type 'Appointment':" + item.getItemClass());
       }
     }
+    return true;
   }
 
   public static void main(String[] args) {

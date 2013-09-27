@@ -272,8 +272,8 @@ public class ExchangeListenerService implements Startable {
               FolderEvent folderEvent = (FolderEvent) iterator.next();
               if (folderEvent.getEventType().equals(EventType.Created) || folderEvent.getEventType().equals(EventType.Modified)) {
                 if (!integrationService.isCalendarPresent(folderEvent.getFolderId())) {
-                  integrationService.synchronizeFullCalendar(folderEvent.getFolderId());
-                  if (!calendarFolderIds.contains(folderEvent.getFolderId())) {
+                  boolean synchronizedCalendar = integrationService.synchronizeFullCalendar(folderEvent.getFolderId());
+                  if (synchronizedCalendar && !calendarFolderIds.contains(folderEvent.getFolderId())) {
                     calendarFolderIds.add(folderEvent.getFolderId());
                   }
                   folderCreatedOrDeleted = true;
