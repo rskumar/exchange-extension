@@ -22,12 +22,4 @@
 	<component>
 		<type>org.exoplatform.extension.exchange.service.CalendarStorageService</type>
 	</component>
-	<external-component-plugins>
-		<target-component>org.exoplatform.services.listener.ListenerService</target-component>
-		<component-plugin>
-			<name>exo.core.security.ConversationRegistry.unregister</name>
-			<set-method>addListener</set-method>
-			<type>org.exoplatform.extension.exchange.listener.ExchangeIntegrationLogoutListener</type>
-		</component-plugin>
-	</external-component-plugins>
 </configuration>
