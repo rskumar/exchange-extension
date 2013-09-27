@@ -13,6 +13,7 @@ import microsoft.exchange.webservices.data.AppointmentSchema;
 import microsoft.exchange.webservices.data.Attachment;
 import microsoft.exchange.webservices.data.Attendee;
 import microsoft.exchange.webservices.data.BasePropertySet;
+import microsoft.exchange.webservices.data.BodyType;
 import microsoft.exchange.webservices.data.FileAttachment;
 import microsoft.exchange.webservices.data.OccurrenceInfo;
 import microsoft.exchange.webservices.data.OccurrenceInfoCollection;
@@ -74,8 +75,7 @@ public class CalendarConverterService {
     }
     setAttachements(event, appointment);
     // This have to be last thing to load because of BAD EWS API impl
-    appointment.load(new PropertySet(AppointmentSchema.Body));
-    event.setDescription(appointment.getBody().toString());
+    setDescription(event, appointment);
   }
 
   /**
@@ -108,7 +108,15 @@ public class CalendarConverterService {
       }
     }
     if (recurrence.hasEnd()) {
-      event.setRepeatUntilDate(recurrence.getEndDate());
+      // TODO: Set maximum hour, minutes and seconds in date: work around for a
+      // bug in eXo
+      Calendar calendarEndDate = Calendar.getInstance();
+      calendarEndDate.setTime(recurrence.getEndDate());
+      calendarEndDate.add(Calendar.DATE, 1);
+      calendarEndDate.set(Calendar.MINUTE, calendarEndDate.getMaximum(Calendar.MINUTE));
+      calendarEndDate.set(Calendar.SECOND, calendarEndDate.getMaximum(Calendar.SECOND));
+      calendarEndDate.set(Calendar.MILLISECOND, calendarEndDate.getMaximum(Calendar.MILLISECOND));
+      event.setRepeatUntilDate(calendarEndDate.getTime());
     }
     if (recurrence.getNumberOfOccurrences() != null) {
       event.setRepeatCount(recurrence.getNumberOfOccurrences());
@@ -375,6 +383,13 @@ public class CalendarConverterService {
         break;
       }
     }
+  }
+
+  private static void setDescription(CalendarEvent event, Appointment appointment) throws Exception, ServiceLocalException {
+    PropertySet bodyPropSet = new PropertySet(AppointmentSchema.Body);
+    bodyPropSet.setRequestedBodyType(BodyType.Text);
+    appointment.load(bodyPropSet);
+    event.setDescription(appointment.getBody().toString());
   }
 
 }
