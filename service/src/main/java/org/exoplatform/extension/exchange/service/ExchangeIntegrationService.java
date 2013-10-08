@@ -89,18 +89,6 @@ public class ExchangeIntegrationService {
     return true;
   }
 
-  public static void main(String[] args) {
-    System.out.println(TimeZone.getTimeZone("UTC").getRawOffset() / 3600000);
-    System.out.println(TimeZone.getDefault().getRawOffset() / 3600000);
-    System.out.println(TimeZone.getDefault().useDaylightTime());
-    System.out.println(TimeZone.getDefault().inDaylightTime(new Date()));
-    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
-    sdf.setTimeZone(TimeZone.getDefault());
-    System.out.println(sdf.format(new Date()));
-    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-    System.out.println(sdf.format(new Date()));
-  }
-
   /**
    * 
    * Synchronize Exchange Calendar identified by 'folderId' with eXo Calendar.
