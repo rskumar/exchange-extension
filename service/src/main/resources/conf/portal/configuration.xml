@@ -3,7 +3,7 @@
 	xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_2.xsd http://www.exoplatform.org/xml/ns/kernel_1_2.xsd"
 	xmlns="http://www.exoplatform.org/xml/ns/kernel_1_2.xsd">
 	<component>
-		<type>org.exoplatform.extension.exchange.listener.ExchangeListenerService</type>
+		<type>org.exoplatform.extension.exchange.listener.IntegrationListener</type>
 		<init-params>
 			<value-param>
 				<name>exchange.ews.url</name>
@@ -20,6 +20,56 @@
 		</init-params>
 	</component>
 	<component>
-		<type>org.exoplatform.extension.exchange.service.CalendarStorageService</type>
+		<type>org.exoplatform.extension.exchange.service.ExoStorageService</type>
 	</component>
+	<component>
+		<type>org.exoplatform.extension.exchange.service.ExchangeStorageService</type>
+	</component>
+	<component>
+		<type>org.exoplatform.extension.exchange.service.CorrespondenceService</type>
+	</component>
+	<external-component-plugins>
+		<target-component>org.exoplatform.calendar.service.CalendarService</target-component>
+		<component-plugin>
+			<name>calendar.exchange.synchronization</name>
+			<set-method>addEventListenerPlugin</set-method>
+			<type>org.exoplatform.extension.exchange.listener.CalendarEventListener</type>
+			<description>Push eXo Calendar modifications to Exchange</description>
+		</component-plugin>
+	</external-component-plugins>
+	<external-component-plugins>
+		<target-component>org.exoplatform.services.jcr.impl.ext.action.SessionActionCatalog</target-component>
+		<component-plugin>
+			<name>Last Update Action</name>
+			<set-method>addPlugin</set-method>
+			<type>org.exoplatform.services.jcr.impl.ext.action.AddActionsPlugin</type>
+			<description>add actions plugin</description>
+			<init-params>
+				<object-param>
+					<name>actions</name>
+					<object
+						type="org.exoplatform.services.jcr.impl.ext.action.AddActionsPlugin$ActionsConfig">
+						<field name="actions">
+							<collection type="java.util.ArrayList">
+								<value>
+									<object
+										type="org.exoplatform.services.jcr.impl.ext.action.ActionConfiguration">
+										<field name="eventTypes">
+											<string>addNode,changeProperty</string>
+										</field>
+										<field name="nodeTypes">
+											<string>exo:calendarEvent</string>
+										</field>
+										<field name="actionClassName">
+											<string>org.exoplatform.webservice.cs.LastUpdateAction</string>
+										</field>
+									</object>
+								</value>
+							</collection>
+						</field>
+					</object>
+				</object-param>
+			</init-params>
+		</component-plugin>
+	</external-component-plugins>
 </configuration>

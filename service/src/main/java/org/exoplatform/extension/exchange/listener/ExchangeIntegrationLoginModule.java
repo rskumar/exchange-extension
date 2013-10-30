@@ -9,16 +9,21 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.jaas.AbstractLoginModule;
 
+/**
+ * 
+ * @author Boubaker Khanfir
+ *
+ */
 public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
 
   private static final Log LOG = ExoLogger.getLogger(ExchangeIntegrationLoginModule.class);
 
-  private ExchangeListenerService exchangeListenerService;
+  private IntegrationListener exchangeListenerService;
   private String username = null;
 
   public ExchangeIntegrationLoginModule() {
     try {
-      this.exchangeListenerService = (ExchangeListenerService) getContainer().getComponentInstanceOfType(ExchangeListenerService.class);
+      this.exchangeListenerService = (IntegrationListener) getContainer().getComponentInstanceOfType(IntegrationListener.class);
     } catch (Exception e) {
       LOG.error(e);
     }
