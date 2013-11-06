@@ -15,7 +15,7 @@
 			</value-param>
 			<value-param>
 				<name>exchange.scheduler.delay</name>
-				<value>${exchange.scheduler.delay:20}</value>
+				<value>${exchange.scheduler.delay:30}</value>
 			</value-param>
 		</init-params>
 	</component>
@@ -28,15 +28,9 @@
 	<component>
 		<type>org.exoplatform.extension.exchange.service.CorrespondenceService</type>
 	</component>
-	<external-component-plugins>
-		<target-component>org.exoplatform.calendar.service.CalendarService</target-component>
-		<component-plugin>
-			<name>calendar.exchange.synchronization</name>
-			<set-method>addEventListenerPlugin</set-method>
-			<type>org.exoplatform.extension.exchange.listener.CalendarEventListener</type>
-			<description>Push eXo Calendar modifications to Exchange</description>
-		</component-plugin>
-	</external-component-plugins>
+	<component>
+		<type>org.exoplatform.extension.exchange.service.ExchangeRESTService</type>
+	</component>
 	<external-component-plugins>
 		<target-component>org.exoplatform.services.jcr.impl.ext.action.SessionActionCatalog</target-component>
 		<component-plugin>
@@ -44,6 +38,7 @@
 			<set-method>addPlugin</set-method>
 			<type>org.exoplatform.services.jcr.impl.ext.action.AddActionsPlugin</type>
 			<description>add actions plugin</description>
+			<priority>1000</priority>
 			<init-params>
 				<object-param>
 					<name>actions</name>
@@ -55,13 +50,33 @@
 									<object
 										type="org.exoplatform.services.jcr.impl.ext.action.ActionConfiguration">
 										<field name="eventTypes">
-											<string>addNode,changeProperty</string>
+											<string>removeNode</string>
+										</field>
+										<field name="nodeTypes">
+											<string>exo:calendarEvent,exo:calendar</string>
+										</field>
+										<field name="isDeep">
+											<boolean>true</boolean>
+										</field>
+										<field name="actionClassName">
+											<string>org.exoplatform.extension.exchange.listener.CalendarDeleteAction</string>
+										</field>
+									</object>
+								</value>
+								<value>
+									<object
+										type="org.exoplatform.services.jcr.impl.ext.action.ActionConfiguration">
+										<field name="eventTypes">
+											<string>addNode,changeProperty,addProperty</string>
 										</field>
 										<field name="nodeTypes">
 											<string>exo:calendarEvent</string>
 										</field>
+										<field name="isDeep">
+											<boolean>false</boolean>
+										</field>
 										<field name="actionClassName">
-											<string>org.exoplatform.webservice.cs.LastUpdateAction</string>
+											<string>org.exoplatform.extension.exchange.listener.CalendarCreateUpdateAction</string>
 										</field>
 									</object>
 								</value>

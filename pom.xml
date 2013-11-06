@@ -83,6 +83,7 @@
 	</dependencyManagement>
 	<modules>
 		<module>service</module>
+		<module>webapp</module>
 		<module>packaging</module>
 	</modules>
 </project>

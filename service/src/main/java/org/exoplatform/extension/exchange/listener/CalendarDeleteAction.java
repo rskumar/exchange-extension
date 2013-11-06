@@ -1,54 +1,63 @@
-/*
- * Copyright (C) 2003-2009 eXo Platform SAS.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Affero General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, see<http://www.gnu.org/licenses/>.
- */
 package org.exoplatform.extension.exchange.listener;
 
-import java.util.GregorianCalendar;
 import javax.jcr.Node;
+
 import org.apache.commons.chain.Context;
+import org.exoplatform.extension.exchange.service.IntegrationService;
 import org.exoplatform.services.command.action.Action;
-import org.exoplatform.services.jcr.impl.core.NodeImpl;
-import org.exoplatform.services.jcr.impl.core.PropertyImpl;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
+import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.services.security.IdentityConstants;
+
+import com.ibm.icu.util.Calendar;
 
 /**
- * Created by The eXo Platform SAS
- * Author : eXoPlatform
- *          exo@exoplatform.com
- * Jun 29, 2009  
+ * 
+ * @author Boubaker Khanfir
+ * 
  */
 public class CalendarDeleteAction implements Action {
 
+  private final static Log LOG = ExoLogger.getLogger(CalendarDeleteAction.class);
+
   public boolean execute(Context context) throws Exception {
-    try {
-      Node node = (Node)context.get("currentItem");
-      if(!node.isNodeType("exo:datetime")){
-        if(node.canAddMixin("exo:datetime")) {
-          node.addMixin("exo:datetime");            
+    Node node = (Node) context.get("currentItem");
+    if (node.isNodeType("exo:calendarEvent")) {
+      String eventId = node.getName();
+      try {
+        String userId = null;
+        ConversationState state = ConversationState.getCurrent();
+        if (state == null || state.getIdentity() == null || state.getIdentity().getUserId().equals(IdentityConstants.ANONIM)) {
+          userId = node.getNode("../../../../..").getName();
+        } else {
+          userId = state.getIdentity().getUserId();
         }
-        node.setProperty("exo:dateCreated",new GregorianCalendar());
-        node.setProperty("exo:dateModified",new GregorianCalendar());  
+
+        IntegrationService integrationService = IntegrationService.getInstance(userId);
+        if (integrationService == null) {
+          LOG.info("User '" + state.getIdentity().getUserId() + "' has no Exchange service, event will not be deleted from Exchange: eventId=" + eventId);
+          return false;
+        } else {
+          try {
+            if (!integrationService.isSynchronizationStarted()) {
+              integrationService.setSynchronizationStarted();
+              if (integrationService.getUserExoLastCheckDate() != null) {
+                integrationService.deleteExchangeCalendarEvent(eventId);
+                integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
+              }
+              integrationService.setSynchronizationStopped();
+            }
+          } catch (Exception e) {
+            LOG.error("Error while deleting Exchange event: " + eventId, e);
+            // Integration is out of sync, so disable auto synchronization
+            // until the scheduled job runs and try to fix this
+            integrationService.setUserExoLastCheckDate(0);
+          }
+        }
+      } catch (Exception e) {
+        LOG.error("Error while deleting Exchange item corresponding event to eXo Event with Id: " + eventId, e);
       }
-      else
-        node.setProperty("exo:dateModified",new GregorianCalendar());  
-    } catch (ClassCastException e){
-      PropertyImpl property = (PropertyImpl)context.get("currentItem");
-      NodeImpl parent = (NodeImpl)property.getParent();
-      if(!parent.isNodeType("exo:calendarEvent"))
-        throw new Exception("incoming node is not exo:calendarEvent");
-      parent.setProperty("exo:dateModified",new GregorianCalendar());
     }
     return false;
   }

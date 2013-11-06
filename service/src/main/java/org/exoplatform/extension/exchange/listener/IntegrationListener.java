@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import microsoft.exchange.webservices.data.CalendarFolder;
 import microsoft.exchange.webservices.data.EventType;
 import microsoft.exchange.webservices.data.ExchangeCredentials;
 import microsoft.exchange.webservices.data.ExchangeService;
@@ -24,6 +25,7 @@ import microsoft.exchange.webservices.data.GetEventsResults;
 import microsoft.exchange.webservices.data.ItemEvent;
 import microsoft.exchange.webservices.data.PullSubscription;
 import microsoft.exchange.webservices.data.WebCredentials;
+import microsoft.exchange.webservices.data.WellKnownFolderName;
 
 import org.exoplatform.calendar.service.Calendar;
 import org.exoplatform.calendar.service.CalendarEvent;
@@ -36,7 +38,9 @@ import org.exoplatform.extension.exchange.service.IntegrationService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.OrganizationService;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
+import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.picocontainer.Startable;
 
@@ -58,6 +62,8 @@ public class IntegrationListener implements Startable {
   private static final String EXCHANGE_SERVER_URL_PARAM_NAME = "exchange.ews.url";
   private static final String EXCHANGE_DOMAIN_PARAM_NAME = "exchange.domain";
   private static final String EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME = "exchange.scheduler.delay";
+  private static final String EXCHANGE_SYNCHRONIZE_ALL = "exchange.synchronize.all.folders";
+  private static final String EXCHANGE_DELETE_CALENDAR_ON_UNSYNC = "exchange.delete.calendar.on.unsync";
 
   public static short diffTimeZone = 0;
 
@@ -76,6 +82,9 @@ public class IntegrationListener implements Startable {
   private final OrganizationService organizationService;
   private final CalendarService calendarService;
   private final IdentityRegistry identityRegistry;
+
+  private boolean synchronizeAllExchangeFolders = false;
+  private boolean deleteExoCalendarOnUnsync = false;
 
   public IntegrationListener(OrganizationService organizationService, CalendarService calendarService, ExoStorageService exoStorageService, ExchangeStorageService exchangeStorageService,
       CorrespondenceService correspondenceService, IdentityRegistry identityRegistry, InitParams params) {
@@ -101,6 +110,18 @@ public class IntegrationListener implements Startable {
       schedulerDelayInSeconds = Integer.valueOf(schedulerDelayInSecondsString);
     } else {
       throw new IllegalStateException("Please add 'exchange.scheduler.delay' parameter in configuration.properties.");
+    }
+    if (params.containsKey(EXCHANGE_SYNCHRONIZE_ALL)) {
+      String deleteExoCalendarOnUnsyncString = params.getValueParam(EXCHANGE_SYNCHRONIZE_ALL).getValue();
+      if (deleteExoCalendarOnUnsyncString != null && deleteExoCalendarOnUnsyncString.equals("true")) {
+        deleteExoCalendarOnUnsync = true;
+      }
+    }
+    if (params.containsKey(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC)) {
+      String exchangeSynchronizeAllString = params.getValueParam(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC).getValue();
+      if (exchangeSynchronizeAllString != null && exchangeSynchronizeAllString.equals("true")) {
+        synchronizeAllExchangeFolders = true;
+      }
     }
 
     // Exchange system dates are saved using UTC timezone independing of User
@@ -129,25 +150,24 @@ public class IntegrationListener implements Startable {
   protected void userLoggedIn(final String username, final String password) {
     try {
       Identity identity = identityRegistry.getIdentity(username);
-      if (identity == null) {
+      if (identity == null || identity.getUserId().equals(IdentityConstants.ANONIM)) {
         throw new IllegalStateException("Identity of user '" + username + "' not found.");
       }
 
+      // Close other tasks if already exists, this can happens when user is
+      // still logged in in other browser
+      closeTaskIfExists(username);
+
       // Scheduled task: listen the changes made on MS Exchange Calendar
-      Thread schedulerCommand = new ExchangeIntegrationTask(username, password);
+      Thread schedulerCommand = new ExchangeIntegrationTask(identity, password);
       ScheduledFuture<?> future = scheduledExecutor.scheduleWithFixedDelay(schedulerCommand, 10, schedulerDelayInSeconds, TimeUnit.SECONDS);
 
       // Add future task to the map to destroy thread when the user logout
-      {
-        // Close other tasks if already exists, this can happens when user is
-        // still logged in in other browser
-        closeTaskIfExists(username);
-        futures.put(username, future);
-      }
+      futures.put(username, future);
 
       LOG.info("User '" + username + "' logged in, exchange synchronization task started.");
     } catch (Exception e) {
-      LOG.warn("Error while initializing user '" + username + "' integration with exchange: " + e.getMessage());
+      LOG.warn("Exchange integration error for user '" + username + "' : " + e.getMessage());
       if (LOG.isTraceEnabled() || LOG.isDebugEnabled()) {
         LOG.trace("Error while initializing user integration with exchange: ", e);
       }
@@ -167,6 +187,15 @@ public class IntegrationListener implements Startable {
     ScheduledFuture<?> future = futures.get(username);
     if (future != null) {
       future.cancel(true);
+      IntegrationService integrationService = IntegrationService.getInstance(username);
+      if (integrationService != null) {
+        try {
+          integrationService.removeInstance();
+        } catch (Throwable e) {
+          // Nothing to do, just log this.
+          LOG.error(e);
+        }
+      }
       LOG.info("Exchange synchronization task stopped for User '" + username + "'.");
     }
   }
@@ -183,7 +212,7 @@ public class IntegrationListener implements Startable {
     try {
       long timeInOriginalTimeZone = dateFormat.parse(dateTimeInOriginalTimeZone).getTime();
       long timeInUTCTimeZone = dateFormat.parse(dateTimeInUTCTimeZone).getTime();
-      diffTimeZone = (short) ((timeInUTCTimeZone - timeInOriginalTimeZone) / 3600000);
+      diffTimeZone = (short) ((timeInUTCTimeZone - timeInOriginalTimeZone) / 60000);
     } catch (Exception e) {
       LOG.error("Error while calculating difference between UTC Timezone and current one.");
     }
@@ -197,55 +226,80 @@ public class IntegrationListener implements Startable {
    * 
    */
   protected class ExchangeIntegrationTask extends Thread {
-    private final ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP2);
-    private final IntegrationService integrationService;
+    private IntegrationService integrationService;
     private List<FolderId> calendarFolderIds = new ArrayList<FolderId>();
     private PullSubscription subscription = null;
     private String username;
+    private ConversationState state;
     private boolean firstSynchronization;
 
-    public ExchangeIntegrationTask(String username, String password) throws Exception {
+    public ExchangeIntegrationTask(Identity identity, String password) throws Exception {
       super("ExchangeIntegrationTask-" + (threadIndex++));
-      this.username = username;
+      this.username = identity.getUserId();
       this.firstSynchronization = true;
 
+      ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP2, TimeZone.getDefault());
+      service.setPreAuthenticate(true);
       ExchangeCredentials credentials = new WebCredentials(username + "@" + exchangeDomain, password);
       service.setCredentials(credentials);
       service.setUrl(new URI(exchangeServerURL));
 
       integrationService = new IntegrationService(organizationService, calendarService, exoStorageService, exchangeStorageService, correspondenceService, service, username);
+
+      // Set current identity visible in this Thread
+      state = new ConversationState(identity);
+      ConversationState.setCurrent(state);
+
+      try {
+        // First call to the service, this may fail because of wrong
+        // credentials
+        if (synchronizeAllExchangeFolders) {
+          calendarFolderIds = integrationService.getAllExchangeCalendars();
+        } else {
+          // Test connection
+          CalendarFolder.bind(service, WellKnownFolderName.Calendar);
+
+          integrationService.setSynchronizationStarted();
+          calendarFolderIds = integrationService.getSynchronizedExchangeCalendars();
+          integrationService.setSynchronizationStopped();
+        }
+      } catch (Exception e) {
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("Error while authenticating user " + username, e);
+        }
+        throw new RuntimeException("Error while authenticating user '" + username + "' to exchange, please make sure you are connected to the correct URL with correct credentials.");
+      }
     }
 
     @Override
     public void run() {
       try {
+        while (integrationService.isSynchronizationStarted()) {
+          try {
+            Thread.sleep(10000);
+          } catch (Exception e) {
+            LOG.warn(e.getMessage());
+          }
+        }
+        integrationService.setSynchronizationStarted();
+
+        ConversationState.setCurrent(state);
+
+        // Verify Exchange folders state with Exo Calendars state
+        List<String> updatedExoEventIDs = integrationService.synchronizeExchangeFolderState(calendarFolderIds, synchronizeAllExchangeFolders, deleteExoCalendarOnUnsync);
+        if (calendarFolderIds.isEmpty()) {
+          return;
+        }
+        if (updatedExoEventIDs == null) {
+          updatedExoEventIDs = new ArrayList<String>();
+        }
         Date lastSyncDate = integrationService.getUserLastCheckDate();
         // This is used once, when user login
         if (firstSynchronization) {
           LOG.info("run first synchronization for user: " + username);
-
-          try {
-            // First call to the service, this may fail because of wrong
-            // credentials
-            calendarFolderIds = integrationService.getExchangeCalendars();
-          } catch (Exception e) {
-            throw new RuntimeException("Error while authenticating user '" + username + "' to exchange, please make sure you are connected to the correct URL with correct credentials.", e);
-          }
-
-          // Verify if some folders was removed
-          integrationService.synchronizeDeletedFolder(calendarFolderIds);
-
           // Verify modifications made on folders
-          for (FolderId folderId : calendarFolderIds) {
-            Calendar calendar = integrationService.getUserCalendarByExchangeFolderId(folderId);
-            if (calendar == null || lastSyncDate == null) {
-              integrationService.synchronizeFullCalendar(folderId);
-            } else {
-              integrationService.synchronizeModificationsOfCalendar(folderId, lastSyncDate, null, diffTimeZone);
-            }
-          }
+          synchronizeByModificationDate(lastSyncDate, updatedExoEventIDs);
           this.firstSynchronization = false;
-
           // Begin catching events from Exchange after first synchronization
           newSubscription();
         } else {
@@ -256,20 +310,15 @@ public class IntegrationListener implements Startable {
             events = subscription.getEvents();
           } catch (Exception e) {
             LOG.warn("Subscription seems timed out, retry. Original cause: " + e.getMessage() + "");
-
             newSubscription();
             events = subscription.getEvents();
           }
-
-          List<String> updatedExoEventIDs = new ArrayList<String>();
-
-          synchronizeExchangeFolders(events, updatedExoEventIDs);
-
+          if (synchronizeAllExchangeFolders) {
+            synchronizeExchangeFolders(events, updatedExoEventIDs);
+          }
           synchronizeExchangeApointments(events, updatedExoEventIDs);
-
           synchronizeByModificationDate(lastSyncDate, updatedExoEventIDs);
-
-          // Renew subcription to manage events
+          // Renew subcription to manage new events
           newSubscription();
         }
 
@@ -280,6 +329,8 @@ public class IntegrationListener implements Startable {
         LOG.info("Synchronization completed.");
       } catch (Exception e) {
         LOG.error("Error while synchronizing calndar entries.", e);
+      } finally {
+        integrationService.setSynchronizationStopped();
       }
     }
 
@@ -298,10 +349,19 @@ public class IntegrationListener implements Startable {
     private void synchronizeExchangeApointments(GetEventsResults events, List<String> updatedExoEventIDs) throws Exception {
       // loop through Appointment events
       Iterable<ItemEvent> itemEvents = events.getItemEvents();
-      for (ItemEvent itemEvent : itemEvents) {
-        CalendarEvent event = integrationService.createOrUpdateOrDelete(itemEvent);
-        if (event != null) {
-          updatedExoEventIDs.add(event.getId());
+      if (itemEvents.iterator().hasNext()) {
+        List<String> itemIds = new ArrayList<String>();
+        for (ItemEvent itemEvent : itemEvents) {
+          if (itemIds.contains(itemEvent.getItemId().getUniqueId())) {
+            continue;
+          }
+          itemIds.add(itemEvent.getItemId().getUniqueId());
+          List<CalendarEvent> updatedEvents = integrationService.createOrUpdateOrDelete(itemEvent);
+          if (updatedEvents != null && !updatedEvents.isEmpty() && updatedExoEventIDs != null) {
+            for (CalendarEvent calendarEvent : updatedEvents) {
+              updatedExoEventIDs.add(calendarEvent.getId());
+            }
+          }
         }
       }
     }
@@ -313,14 +373,14 @@ public class IntegrationListener implements Startable {
         while (iterator.hasNext()) {
           FolderEvent folderEvent = (FolderEvent) iterator.next();
           if (folderEvent.getEventType().equals(EventType.Created) || folderEvent.getEventType().equals(EventType.Modified)) {
-            if (!integrationService.isCalendarPresent(folderEvent.getFolderId())) {
+            if (!integrationService.isCalendarPresentInExo(folderEvent.getFolderId())) {
               List<String> updatedEventIDs = integrationService.synchronizeFullCalendar(folderEvent.getFolderId());
               updatedExoEventIDs.addAll(updatedEventIDs);
               if (!updatedEventIDs.isEmpty() && !calendarFolderIds.contains(folderEvent.getFolderId())) {
                 calendarFolderIds.add(folderEvent.getFolderId());
               }
             }
-          } else if (folderEvent.getEventType().equals(EventType.Deleted) || folderEvent.getEventType().equals(EventType.Moved)) {
+          } else if (folderEvent.getEventType().equals(EventType.Deleted)) {
             boolean deleted = integrationService.deleteCalendar(folderEvent.getFolderId());
             // If deleted, remove FolderId from listened folder Id and renew
             // subscription
@@ -328,28 +388,12 @@ public class IntegrationListener implements Startable {
               calendarFolderIds.remove(folderEvent.getFolderId());
             }
           } else {
-            LOG.warn("Folder Event wasn't catched: " + folderEvent.getEventType().name());
+            if (LOG.isTraceEnabled()) {
+              LOG.trace("Folder Event wasn't catched: " + folderEvent.getEventType().name() + "on folder: " + folderEvent.getFolderId().getUniqueId());
+            }
           }
         }
       }
-    }
-
-    @Override
-    public void interrupt() {
-      if (subscription != null) {
-        try {
-          LOG.info("Thread interruption: unsubscribe user service:" + username);
-          subscription.unsubscribe();
-        } catch (Exception e) {
-          LOG.error("Thread interruption: Error while unsubscribe to thread of user:" + username);
-        }
-      }
-      try {
-        integrationService.finalize();
-      } catch (Throwable e) {
-        LOG.error("Error while inerrupting thread", e);
-      }
-      super.interrupt();
     }
 
     private void newSubscription() throws Exception {
@@ -366,7 +410,25 @@ public class IntegrationListener implements Startable {
           }
         }
       }
-      subscription = service.subscribeToPullNotifications(calendarFolderIds, 5, null, EventType.Modified, EventType.Moved, EventType.FreeBusyChanged, EventType.Created, EventType.Deleted);
+      subscription = integrationService.getService().subscribeToPullNotifications(calendarFolderIds, 5, null, EventType.Modified, EventType.Created, EventType.Deleted);
+    }
+
+    @Override
+    public void interrupt() {
+      if (subscription != null) {
+        try {
+          LOG.info("Thread interruption: unsubscribe user service:" + username);
+          subscription.unsubscribe();
+        } catch (Exception e) {
+          LOG.error("Thread interruption: Error while unsubscribe to thread of user:" + username);
+        }
+      }
+      try {
+        integrationService.removeInstance();
+      } catch (Throwable e) {
+        LOG.error("Error while inerrupting thread", e);
+      }
+      super.interrupt();
     }
   }
 }

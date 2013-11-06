@@ -3,7 +3,10 @@ package org.exoplatform.extension.exchange.service;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -12,12 +15,17 @@ import javax.jcr.Session;
 
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.exoplatform.calendar.service.Utils;
+import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
 public class CorrespondenceService implements Serializable {
   private static final long serialVersionUID = 4155183714826625091L;
+
+  private final static Log LOG = ExoLogger.getLogger(CorrespondenceService.class);
 
   private static final String EXCHANGE_NODE_NAME = "calendar-exchange-extension";
 
@@ -39,7 +47,7 @@ public class CorrespondenceService implements Serializable {
    * @param username
    * @param id
    * @return Id of the corresponding element
-   * @throws Exception 
+   * @throws Exception
    */
   protected String getCorrespondingId(String username, String id) throws Exception {
     Properties properties = loadCorrespondenceProperties(username);
@@ -59,6 +67,15 @@ public class CorrespondenceService implements Serializable {
    * @throws Exception
    */
   protected void setCorrespondingId(String username, String exoId, String exchangeId) throws Exception {
+    String oldExoId = getCorrespondingId(username, exchangeId);
+    String oldExchangeId = getCorrespondingId(username, exoId);
+    if ((oldExoId != null && !oldExoId.equals(exoId)) || (oldExchangeId != null && !oldExchangeId.equals(exchangeId))) {
+      LOG.error("Exchange integration, correspondence service : An old existing ID will be replaced by another one.");
+
+      // Make sure no duplicated entry
+      deleteCorrespondingId(username, exchangeId, exoId);
+    }
+
     Properties properties = loadCorrespondenceProperties(username);
     properties.setProperty(exchangeId, exoId);
     properties.setProperty(exoId, exchangeId);
@@ -81,6 +98,30 @@ public class CorrespondenceService implements Serializable {
     saveProperties(username, properties);
   }
 
+  protected void deleteCorrespondingId(String username, String id) throws Exception {
+    Properties properties = loadCorrespondenceProperties(username);
+    String secondId = properties.getProperty(id);
+    if (secondId != null) {
+      properties.remove(id);
+      properties.remove(secondId);
+      saveProperties(username, properties);
+    }
+  }
+
+  protected List<String> getSynchronizedExchangeFolderIds(String username) throws Exception {
+    Properties properties = loadCorrespondenceProperties(username);
+    List<String> folderIds = new ArrayList<String>();
+    @SuppressWarnings("unchecked")
+    Enumeration<String> enumeration = (Enumeration<String>) properties.propertyNames();
+    while (enumeration.hasMoreElements()) {
+      String name = (String) enumeration.nextElement();
+      if (CalendarConverterService.isExchangeCalendarId(name)) {
+        folderIds.add(properties.getProperty(name));
+      }
+    }
+    return folderIds;
+  }
+
   private void saveProperties(String username, Properties properties) throws Exception {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     properties.store(out, "");
@@ -99,7 +140,6 @@ public class CorrespondenceService implements Serializable {
     }
     node.setProperty(Utils.JCR_DATA, new ByteArrayInputStream(out.toByteArray()));
     session.save();
-    session.logout();
   }
 
   private Properties loadCorrespondenceProperties(String username) throws Exception {
@@ -122,16 +162,6 @@ public class CorrespondenceService implements Serializable {
       propertiesMap.put(username, properties);
     }
     return properties;
-  }
-
-  public void deleteCorrespondingId(String username, String id) throws Exception {
-    Properties properties = loadCorrespondenceProperties(username);
-    String secondId = properties.getProperty(id);
-    if (secondId != null) {
-      properties.remove(id);
-      properties.remove(secondId);
-      saveProperties(username, properties);
-    }
   }
 
 }
