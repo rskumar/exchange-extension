@@ -73,15 +73,15 @@ public class IntegrationListener implements Startable {
   private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(10);
   private final Map<String, ScheduledFuture<?>> futures = new HashMap<String, ScheduledFuture<?>>();
 
-  private final String exchangeServerURL;
-  private final String exchangeDomain;
-
   private final ExoStorageService exoStorageService;
   private final ExchangeStorageService exchangeStorageService;
   private final CorrespondenceService correspondenceService;
   private final OrganizationService organizationService;
   private final CalendarService calendarService;
   private final IdentityRegistry identityRegistry;
+
+  public String exchangeServerURL = null;
+  public String exchangeDomain = null;
 
   private boolean synchronizeAllExchangeFolders = false;
   private boolean deleteExoCalendarOnUnsync = false;
@@ -95,21 +95,23 @@ public class IntegrationListener implements Startable {
     this.organizationService = organizationService;
     this.calendarService = calendarService;
 
-    if (params.containsKey(EXCHANGE_SERVER_URL_PARAM_NAME)) {
+    if (params.containsKey(EXCHANGE_SERVER_URL_PARAM_NAME) && !params.getValueParam(EXCHANGE_SERVER_URL_PARAM_NAME).getValue().isEmpty()) {
       exchangeServerURL = params.getValueParam(EXCHANGE_SERVER_URL_PARAM_NAME).getValue();
     } else {
-      throw new IllegalStateException("Please add 'exchange.ews.url' parameter in configuration.properties.");
+      LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_SERVER_URL_PARAM_NAME + "is not set.");
     }
-    if (params.containsKey(EXCHANGE_DOMAIN_PARAM_NAME)) {
+    if (params.containsKey(EXCHANGE_DOMAIN_PARAM_NAME) && !params.getValueParam(EXCHANGE_DOMAIN_PARAM_NAME).getValue().isEmpty()) {
       exchangeDomain = params.getValueParam(EXCHANGE_DOMAIN_PARAM_NAME).getValue();
     } else {
-      throw new IllegalStateException("Please add 'exchange.domain' parameter in configuration.properties.");
+      LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_DOMAIN_PARAM_NAME + "is not set.");
     }
     if (params.containsKey(EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME)) {
       String schedulerDelayInSecondsString = params.getValueParam(EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME).getValue();
       schedulerDelayInSeconds = Integer.valueOf(schedulerDelayInSecondsString);
-    } else {
-      throw new IllegalStateException("Please add 'exchange.scheduler.delay' parameter in configuration.properties.");
+    }
+    if (schedulerDelayInSeconds < 10) {
+      LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME + "is not correctly set. Use default: 30.");
+      schedulerDelayInSeconds = 30;
     }
     if (params.containsKey(EXCHANGE_SYNCHRONIZE_ALL)) {
       String deleteExoCalendarOnUnsyncString = params.getValueParam(EXCHANGE_SYNCHRONIZE_ALL).getValue();
@@ -128,12 +130,11 @@ public class IntegrationListener implements Startable {
     // Calendar timezone, so we have to get the diff with eXo Server TimeZone
     // and Exchange to make search queries
     diffTimeZone = getTimeZoneDiffWithUTC();
-
-    LOG.info("Successfully started.");
   }
 
   @Override
   public void start() {
+    LOG.info("Echange Synchronization Service: Successfully started.");
   }
 
   @Override
@@ -147,7 +148,33 @@ public class IntegrationListener implements Startable {
    * @param username
    * @param password
    */
-  protected void userLoggedIn(final String username, final String password) {
+  public void userLoggedIn(final String username, final String password) throws Exception {
+    String exchangeStoredUsername = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
+    if (exchangeStoredUsername != null && !exchangeStoredUsername.isEmpty()) {
+      String exchangeStoredServerName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
+      String exchangeStoredDomainName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_USERNAME_ATTRIBUTE);
+      String exchangeStoredPassword = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE);
+      userLoggedIn(exchangeStoredUsername, exchangeStoredPassword, exchangeStoredDomainName, exchangeStoredServerName);
+    } else if (exchangeDomain != null && exchangeServerURL != null) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Exchange Synchronization Service: User '" + username + "' have not yet set parameters, use default Exchange server settings.");
+      }
+      userLoggedIn(username, password, exchangeDomain, exchangeServerURL);
+    } else {
+      LOG.warn("Exchange Service is unvailable, please set parameters.");
+    }
+  }
+
+  /**
+   * 
+   * Register User with Exchange services.
+   * 
+   * @param username
+   * @param password
+   * @param exchangeDomain
+   * @param exchangeServerURL
+   */
+  public void userLoggedIn(final String username, final String password, String exchangeDomain, String exchangeServerURL) {
     try {
       Identity identity = identityRegistry.getIdentity(username);
       if (identity == null || identity.getUserId().equals(IdentityConstants.ANONIM)) {
@@ -159,7 +186,7 @@ public class IntegrationListener implements Startable {
       closeTaskIfExists(username);
 
       // Scheduled task: listen the changes made on MS Exchange Calendar
-      Thread schedulerCommand = new ExchangeIntegrationTask(identity, password);
+      Thread schedulerCommand = new ExchangeIntegrationTask(identity, password, exchangeDomain, exchangeServerURL);
       ScheduledFuture<?> future = scheduledExecutor.scheduleWithFixedDelay(schedulerCommand, 10, schedulerDelayInSeconds, TimeUnit.SECONDS);
 
       // Add future task to the map to destroy thread when the user logout
@@ -179,7 +206,7 @@ public class IntegrationListener implements Startable {
    * 
    * @param username
    */
-  protected void userLoggedOut(String username) {
+  public void userLoggedOut(String username) {
     closeTaskIfExists(username);
   }
 
@@ -233,7 +260,7 @@ public class IntegrationListener implements Startable {
     private ConversationState state;
     private boolean firstSynchronization;
 
-    public ExchangeIntegrationTask(Identity identity, String password) throws Exception {
+    public ExchangeIntegrationTask(Identity identity, String password, String exchangeDomain, String exchangeServerURL) throws Exception {
       super("ExchangeIntegrationTask-" + (threadIndex++));
       this.username = identity.getUserId();
       this.firstSynchronization = true;

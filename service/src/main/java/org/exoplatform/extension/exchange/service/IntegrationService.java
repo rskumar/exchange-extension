@@ -47,6 +47,11 @@ import org.exoplatform.services.organization.UserProfile;
  */
 public class IntegrationService {
 
+  public static final String USER_EXCHANGE_SERVER_URL_ATTRIBUTE = "exchange.server.url";
+  public static final String USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE = "exchange.server.domain";
+  public static final String USER_EXCHANGE_USERNAME_ATTRIBUTE = "exchange.username";
+  public static final String USER_EXCHANGE_PASSWORD_ATTRIBUTE = "exchange.password";
+
   private final static Log LOG = ExoLogger.getLogger(IntegrationService.class);
 
   private static final String USER_EXCHANGE_HANDLED_ATTRIBUTE = "exchange.check.date";
@@ -371,103 +376,6 @@ public class IntegrationService {
 
   /**
    * 
-   * Sets last check operation date.
-   * 
-   * @param username
-   * @param time
-   * @throws Exception
-   */
-  public void setUserLastCheckDate(long time) throws Exception {
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
-    }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    userProfile.setAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE, "" + time);
-    long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-    if (time > savedTime) {
-      userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
-    }
-    organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-    }
-  }
-
-  /**
-   * 
-   * Gets last check operation date
-   * 
-   * @return
-   * @throws Exception
-   */
-  public Date getUserLastCheckDate() throws Exception {
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
-    }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    long time = userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE));
-    Date lastSyncDate = null;
-    if (time > 0) {
-      lastSyncDate = new Date(time);
-    }
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-    }
-    return lastSyncDate;
-  }
-
-  /**
-   * 
-   * Sets last check operation date.
-   * 
-   * @param username
-   * @param time
-   * @throws Exception
-   */
-  public void setUserExoLastCheckDate(long time) throws Exception {
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
-    }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-    if (savedTime <= 0) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("User '" + username + "' exo last check time was not set before, may be the synhronization was not run before or an error occured in the meantime.");
-      }
-    } else {
-      userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
-      organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
-    }
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-    }
-  }
-
-  /**
-   * 
-   * Gets last check operation date
-   * 
-   * @return
-   * @throws Exception
-   */
-  public Date getUserExoLastCheckDate() throws Exception {
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
-    }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    long time = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-    Date lastSyncDate = null;
-    if (time > 0) {
-      lastSyncDate = new Date(time);
-    }
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-    }
-    return lastSyncDate;
-  }
-
-  /**
-   * 
    * Get corresponding User Calenar from Exchange Folder Id
    * 
    * @param folderId
@@ -535,8 +443,8 @@ public class IntegrationService {
    * @param eventId
    * @throws Exception
    */
-  public void deleteExchangeCalendarEvent(String eventId) throws Exception {
-    exchangeStorageService.deleteExchangeAppointment(username, service, eventId);
+  public void deleteExchangeCalendarEvent(String eventId, String calendarId) throws Exception {
+    exchangeStorageService.deleteExchangeAppointment(username, service, eventId, calendarId);
   }
 
   /**
@@ -716,8 +624,162 @@ public class IntegrationService {
     return findResults.getItems();
   }
 
+  /**
+   * 
+   * Sets last check operation date.
+   * 
+   * @param username
+   * @param time
+   * @throws Exception
+   */
+  public void setUserLastCheckDate(long time) throws Exception {
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
+    }
+    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+    userProfile.setAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE, "" + time);
+    long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
+    if (time > savedTime) {
+      userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
+    }
+    organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    }
+  }
+
+  /**
+   * 
+   * Gets last check operation date
+   * 
+   * @return
+   * @throws Exception
+   */
+  public Date getUserLastCheckDate() throws Exception {
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
+    }
+    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+    long time = userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE));
+    Date lastSyncDate = null;
+    if (time > 0) {
+      lastSyncDate = new Date(time);
+    }
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    }
+    return lastSyncDate;
+  }
+
+  /**
+   * 
+   * Sets last check operation date.
+   * 
+   * @param username
+   * @param time
+   * @throws Exception
+   */
+  public void setUserExoLastCheckDate(long time) throws Exception {
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
+    }
+    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+    long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
+    if (savedTime <= 0) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("User '" + username + "' exo last check time was not set before, may be the synhronization was not run before or an error occured in the meantime.");
+      }
+    } else {
+      userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
+      organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
+    }
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    }
+  }
+
+  /**
+   * 
+   * Gets last check operation date
+   * 
+   * @return
+   * @throws Exception
+   */
+  public Date getUserExoLastCheckDate() throws Exception {
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
+    }
+    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+    long time = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
+    Date lastSyncDate = null;
+    if (time > 0) {
+      lastSyncDate = new Date(time);
+    }
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    }
+    return lastSyncDate;
+  }
+
   public ExchangeService getService() {
     return service;
   }
 
+  /**
+   * 
+   * @param name
+   * @param value
+   * @throws Exception
+   */
+  public void setUserArrtibute(String name, String value) throws Exception {
+    setUserArrtibute(organizationService, username, name, value);
+  }
+
+  /**
+   * 
+   * @param name
+   * @return
+   * @throws Exception
+   */
+  public String getUserArrtibute(String name) throws Exception {
+    return getUserArrtibute(organizationService, username, name);
+  }
+
+  /**
+   * 
+   * @param name
+   * @param value
+   * @throws Exception
+   */
+  public static void setUserArrtibute(OrganizationService organizationService, String username, String name, String value) throws Exception {
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
+    }
+    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+    userProfile.setAttribute(name, value);
+    organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    }
+  }
+
+  /**
+   * 
+   * @param name
+   * @return
+   * @throws Exception
+   */
+  public static String getUserArrtibute(OrganizationService organizationService, String username, String name) throws Exception {
+    if (organizationService instanceof ComponentRequestLifecycle) {
+      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
+    }
+    try {
+      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+      return userProfile.getAttribute(name);
+    } finally {
+      if (organizationService instanceof ComponentRequestLifecycle) {
+        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+      }
+    }
+  }
 }

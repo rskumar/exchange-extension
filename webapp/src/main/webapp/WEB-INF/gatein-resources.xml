@@ -9,11 +9,11 @@
 		<skin-module>ExchangeExtension</skin-module>
 		<css-path>/skin/Stylesheet.css</css-path>
 	</portal-skin>
-
-	<scripts>
-		<name>exchange-extension</name>
-		<script>
-			<path>/javascript/exchange-extension.js</path>
-		</script>
-	</scripts>
+	<javascript>
+		<param>
+			<js-module>exchange-extension</js-module>
+			<js-path>/javascript/exchange-extension.js</js-path>
+			<js-priority>0</js-priority>
+		</param>
+	</javascript>
 </gatein-resources>

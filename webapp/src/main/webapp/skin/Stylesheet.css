@@ -13,9 +13,9 @@
   height: auto;
   background-color: #fff;
   z-index: 2000;
-  padding: 3px;
+  padding: 0;
   width: 250px;
-  height: 250px;
+  height: 280px;
 }
 
 .ExchangeSettingsWindow:before {
@@ -43,7 +43,7 @@
 
 .ExchangeSettingsWindow .ExchangeSettingsTitle {
   white-space: nowrap;
-  height: 20px;
+  height: 26px;
   margin: 0;
   border-bottom: 1px solid grey;
   padding: 7px 3px;
@@ -53,10 +53,19 @@
   float: left;
   margin: 0;
   color: blue;
+  height: 25px;
+  padding-top: 4px;
+  padding-left: 2px;
 }
 
 .ExchangeSettingsWindow .ExchangeSettingsTitle .ExchangeSettingsInfo {
   font-size: 10px;
+  float: right;
+}
+
+.ExchangeEditSettingsButton {
+  font-size: 11px;
+  height: 26px;
   float: right;
 }
 
@@ -88,5 +97,44 @@
   top: 0;
   left: 0;
   background-color: gray;
-  opacity:0.5;
+  opacity: 0.5;
+}
+
+.ExchangeEditSettingsPanel {
+  height: 250px;
+}
+
+.ExchangeEditSettingsContent input {
+  width: 173px;
+  float: right;
+  margin: 10px 2px;
+}
+
+.ExchangeEditSettingsContent input::-webkit-input-placeholder {
+  font-size: 10px;
+  color: #BBBBBB;
+}
+
+.ExchangeEditSettingsContent {
+  height: 194px;
+  padding: 2px;
+}
+
+.ExchangeEditSettingsContent label {
+  clear: both;
+  float: left;
+  padding-top: 3px;
+  margin: 10px 2px;
+}
+
+.ExchangeEditSettingsButtons {
+  clear: both;
+  width: 100%;
+  border-top: 1px solid gray;
+  height: 39px;
+}
+
+.ExchangeEditSettingsButtons button {
+  float: right;
+  margin: 5px;
 }

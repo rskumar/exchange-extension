@@ -115,7 +115,7 @@ public class ExchangeStorageService implements Serializable {
         // Exchange
         if (CalendarConverterService.isExchangeEventId(event.getId())) {
           LOG.error("Conflict in modification, inconsistant data, the event was deleted in Exchange but seems always in eXo, the event will be deleted from Exchange.");
-          deleteExchangeAppointment(username, service, event.getId());
+          deleteExchangeAppointment(username, service, event.getId(), event.getCalendarId());
           return false;
         }
         appointment = new Appointment(service);
@@ -144,7 +144,7 @@ public class ExchangeStorageService implements Serializable {
           // Exchange
           if (CalendarConverterService.isExchangeEventId(event.getId())) {
             LOG.error("Conflict in modification, inconsistant data, the event was deleted in Exchange but seems always in eXo, the event will be deleted from Exchange.");
-            deleteExchangeAppointment(username, service, event.getId());
+            deleteExchangeAppointment(username, service, event.getId(), event.getCalendarId());
             return false;
           }
           appointment = new Appointment(service);
@@ -173,23 +173,29 @@ public class ExchangeStorageService implements Serializable {
    * @param username
    * @param service
    * @param eventId
+   * @param calendarId
    * @throws Exception
    */
-  public void deleteExchangeAppointment(String username, ExchangeService service, String eventId) throws Exception {
+  public void deleteExchangeAppointment(String username, ExchangeService service, String eventId, String calendarId) throws Exception {
     String itemId = correspondenceService.getCorrespondingId(username, eventId);
     if (itemId == null) {
       if (LOG.isTraceEnabled()) {
         LOG.trace("The event was deleted from eXo but seems don't have corresponding Event in Exchange, ignore.");
       }
     } else {
-      Appointment appointment = null;
-      try {
-        appointment = Appointment.bind(service, ItemId.getItemIdFromString(itemId));
-        LOG.info("Delete Exchange appointment: " + appointment.getSubject());
-        appointment.delete(DeleteMode.HardDelete);
-      } catch (ServiceResponseException e) {
-        if (LOG.isTraceEnabled()) {
-          LOG.trace("Exchange Item was not bound, it was deleted or not yet created:" + eventId);
+      // Verify that calendar is synchronized
+      if (correspondenceService.getCorrespondingId(username, calendarId) == null) {
+        LOG.warn("Calendar with id '" + calendarId + "' seems not synchronized with exchange.");
+      } else {
+        Appointment appointment = null;
+        try {
+          appointment = Appointment.bind(service, ItemId.getItemIdFromString(itemId));
+          LOG.info("Delete Exchange appointment: " + appointment.getSubject());
+          appointment.delete(DeleteMode.HardDelete);
+        } catch (ServiceResponseException e) {
+          if (LOG.isTraceEnabled()) {
+            LOG.trace("Exchange Item was not bound, it was deleted or not yet created:" + eventId);
+          }
         }
       }
       correspondenceService.deleteCorrespondingId(username, itemId, eventId);

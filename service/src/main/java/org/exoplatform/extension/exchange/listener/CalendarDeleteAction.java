@@ -3,6 +3,7 @@ package org.exoplatform.extension.exchange.listener;
 import javax.jcr.Node;
 
 import org.apache.commons.chain.Context;
+import org.exoplatform.calendar.service.Utils;
 import org.exoplatform.extension.exchange.service.IntegrationService;
 import org.exoplatform.services.command.action.Action;
 import org.exoplatform.services.log.ExoLogger;
@@ -43,7 +44,8 @@ public class CalendarDeleteAction implements Action {
             if (!integrationService.isSynchronizationStarted()) {
               integrationService.setSynchronizationStarted();
               if (integrationService.getUserExoLastCheckDate() != null) {
-                integrationService.deleteExchangeCalendarEvent(eventId);
+                String calendarId = node.getProperty(Utils.CALENDAR_ID).getString();
+                integrationService.deleteExchangeCalendarEvent(eventId, calendarId);
                 integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
               }
               integrationService.setSynchronizationStopped();
