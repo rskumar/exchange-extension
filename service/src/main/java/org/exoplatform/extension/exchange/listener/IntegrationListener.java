@@ -14,11 +14,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import microsoft.exchange.webservices.data.CalendarFolder;
 import microsoft.exchange.webservices.data.EventType;
 import microsoft.exchange.webservices.data.ExchangeCredentials;
 import microsoft.exchange.webservices.data.ExchangeService;
 import microsoft.exchange.webservices.data.ExchangeVersion;
+import microsoft.exchange.webservices.data.Folder;
 import microsoft.exchange.webservices.data.FolderEvent;
 import microsoft.exchange.webservices.data.FolderId;
 import microsoft.exchange.webservices.data.GetEventsResults;
@@ -149,10 +149,10 @@ public class IntegrationListener implements Startable {
    * @param password
    */
   public void userLoggedIn(final String username, final String password) throws Exception {
-    String exchangeStoredUsername = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
+    String exchangeStoredUsername = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_USERNAME_ATTRIBUTE);
     if (exchangeStoredUsername != null && !exchangeStoredUsername.isEmpty()) {
-      String exchangeStoredServerName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
-      String exchangeStoredDomainName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_USERNAME_ATTRIBUTE);
+      String exchangeStoredServerName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
+      String exchangeStoredDomainName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
       String exchangeStoredPassword = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE);
       userLoggedIn(exchangeStoredUsername, exchangeStoredPassword, exchangeStoredDomainName, exchangeStoredServerName);
     } else if (exchangeDomain != null && exchangeServerURL != null) {
@@ -277,37 +277,27 @@ public class IntegrationListener implements Startable {
       state = new ConversationState(identity);
       ConversationState.setCurrent(state);
 
-      try {
-        // First call to the service, this may fail because of wrong
-        // credentials
-        if (synchronizeAllExchangeFolders) {
-          calendarFolderIds = integrationService.getAllExchangeCalendars();
-        } else {
-          // Test connection
-          CalendarFolder.bind(service, WellKnownFolderName.Calendar);
-
+      // First call to the service, this may fail because of wrong
+      // credentials
+      if (synchronizeAllExchangeFolders) {
+        calendarFolderIds = exchangeStorageService.getAllExchangeCalendars(service);
+      } else {
+        // Test connection
+        Folder folder = integrationService.getExchangeCalendar(FolderId.getFolderIdFromWellKnownFolderName(WellKnownFolderName.Calendar));
+        if (folder != null) {
           integrationService.setSynchronizationStarted();
           calendarFolderIds = integrationService.getSynchronizedExchangeCalendars();
           integrationService.setSynchronizationStopped();
+        } else {
+          throw new RuntimeException("Error while authenticating user '" + username + "' to exchange, please make sure you are connected to the correct URL with correct credentials.");
         }
-      } catch (Exception e) {
-        if (LOG.isTraceEnabled()) {
-          LOG.trace("Error while authenticating user " + username, e);
-        }
-        throw new RuntimeException("Error while authenticating user '" + username + "' to exchange, please make sure you are connected to the correct URL with correct credentials.");
       }
     }
 
     @Override
     public void run() {
+      waitOtherTasks();
       try {
-        while (integrationService.isSynchronizationStarted()) {
-          try {
-            Thread.sleep(10000);
-          } catch (Exception e) {
-            LOG.warn(e.getMessage());
-          }
-        }
         integrationService.setSynchronizationStarted();
 
         ConversationState.setCurrent(state);
@@ -361,6 +351,19 @@ public class IntegrationListener implements Startable {
       }
     }
 
+    private void waitOtherTasks() {
+      int i = 0;
+      while (integrationService.isSynchronizationStarted() && i < 30) {
+        LOG.info("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'" + username + "'.");
+        try {
+          Thread.sleep(1000);
+        } catch (Exception e) {
+          LOG.warn(e.getMessage());
+        }
+        i++;
+      }
+    }
+
     private void synchronizeByModificationDate(Date lastSyncDate, List<String> updatedExoEventIDs) throws Exception {
       // synchronize eXo Calendar with Exchange
       for (FolderId folderId : calendarFolderIds) {
@@ -408,7 +411,7 @@ public class IntegrationListener implements Startable {
               }
             }
           } else if (folderEvent.getEventType().equals(EventType.Deleted)) {
-            boolean deleted = integrationService.deleteCalendar(folderEvent.getFolderId());
+            boolean deleted = integrationService.deleteExoCalendar(folderEvent.getFolderId());
             // If deleted, remove FolderId from listened folder Id and renew
             // subscription
             if (deleted && calendarFolderIds.contains(folderEvent.getFolderId())) {

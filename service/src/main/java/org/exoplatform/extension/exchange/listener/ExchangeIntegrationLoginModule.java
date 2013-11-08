@@ -12,7 +12,7 @@ import org.exoplatform.services.security.jaas.AbstractLoginModule;
 /**
  * 
  * @author Boubaker Khanfir
- *
+ * 
  */
 public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
 
@@ -22,11 +22,7 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
   private String username = null;
 
   public ExchangeIntegrationLoginModule() {
-    try {
-      this.exchangeListenerService = (IntegrationListener) getContainer().getComponentInstanceOfType(IntegrationListener.class);
-    } catch (Exception e) {
-      LOG.error(e);
-    }
+    getExchangeListenerService();
   }
 
   @Override
@@ -46,8 +42,9 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
         // Let other login modules handle this
         return true;
       }
-      exchangeListenerService.userLoggedIn(username, password);
+      getExchangeListenerService().userLoggedIn(username, password);
     } catch (Exception e) {
+      e.printStackTrace();
       getLogger().error(e);
     }
     // Let other login modules run
@@ -75,5 +72,16 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
   @Override
   protected Log getLogger() {
     return LOG;
+  }
+
+  public IntegrationListener getExchangeListenerService() {
+    if (exchangeListenerService == null) {
+      try {
+        this.exchangeListenerService = (IntegrationListener) getContainer().getComponentInstanceOfType(IntegrationListener.class);
+      } catch (Exception e) {
+        LOG.error(e);
+      }
+    }
+    return exchangeListenerService;
   }
 }

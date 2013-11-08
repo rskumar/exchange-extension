@@ -58,22 +58,28 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     // It must be a user present in the session because of RolesAllowed
     // annotation
     String username = ConversationState.getCurrent().getIdentity().getUserId();
+    try {
+      List<FolderBean> beans = new ArrayList<FolderBean>();
 
-    List<FolderBean> beans = new ArrayList<FolderBean>();
-
-    IntegrationService service = IntegrationService.getInstance(username);
-    if (service != null) {
-      List<FolderId> folderIDs = service.getAllExchangeCalendars();
-      for (FolderId folderId : folderIDs) {
-        Folder folder = service.getExchangeCalendar(folderId);
-        if (folder != null) {
-          boolean synchronizedFolder = service.isCalendarSynchronized(folderId.getUniqueId());
-          FolderBean bean = new FolderBean(folderId.getUniqueId(), folder.getDisplayName(), synchronizedFolder);
-          beans.add(bean);
+      IntegrationService service = IntegrationService.getInstance(username);
+      if (service != null) {
+        List<FolderId> folderIDs = service.getAllExchangeCalendars();
+        for (FolderId folderId : folderIDs) {
+          Folder folder = service.getExchangeCalendar(folderId);
+          if (folder != null) {
+            boolean synchronizedFolder = service.isCalendarSynchronizedWithExchange(folderId.getUniqueId());
+            FolderBean bean = new FolderBean(folderId.getUniqueId(), folder.getDisplayName(), synchronizedFolder);
+            beans.add(bean);
+          }
         }
       }
+      return Response.ok(beans).cacheControl(cc).build();
+    } catch (Exception e) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Exchange Inegration Service: Unable to retrieve list of calendars for user: '" + username + "'");
+      }
+      return Response.ok().cacheControl(cc).build();
     }
-    return Response.ok(beans).cacheControl(cc).build();
   }
 
   @GET

@@ -53,14 +53,24 @@ public class CalendarCreateUpdateAction implements Action {
           LOG.warn("No authenticated user was found while trying to create/update eXo Calendar event with id: '" + eventId + "' for user: " + userId);
           return false;
         } else {
+          boolean started = false;
           try {
-            if (!integrationService.isSynchronizationStarted()) {
-              integrationService.setSynchronizationStarted();
-              if (isNodeValid(node) && integrationService.getUserExoLastCheckDate() != null) {
-                integrationService.updateOrCreateExchangeCalendarEvent(node);
-                integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
+            if (isNodeValid(node)) {
+              String calendarId = node.getProperty(Utils.EXO_CALENDAR_ID).getString();
+              if (integrationService.isCalendarSynchronizedWithExchange(calendarId)) {
+                // Test if synchronization task is started, if yes, don't take
+                // care about modifications to not corrupt data by cocurrent
+                // modifications.
+                if (!integrationService.isSynchronizationStarted()) {
+                  integrationService.setSynchronizationStarted();
+                  started = true;
+                  if (integrationService.getUserExoLastCheckDate() != null) {
+                    integrationService.updateOrCreateExchangeCalendarEvent(node);
+                    integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
+                  }
+                  integrationService.setSynchronizationStopped();
+                }
               }
-              integrationService.setSynchronizationStopped();
             }
           } catch (Exception e) {
             // This can happen if the node was newly created, so not all
@@ -69,6 +79,11 @@ public class CalendarCreateUpdateAction implements Action {
             // Integration is out of sync, so disable auto synchronization
             // until the scheduled job runs and try to fix this
             integrationService.setUserExoLastCheckDate(0);
+          } finally {
+            // Set synchronization as finished if it was started here.
+            if (started) {
+              integrationService.setSynchronizationStopped();
+            }
           }
         }
       } catch (Exception e) {

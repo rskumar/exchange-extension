@@ -47,14 +47,13 @@ public class ExoStorageService implements Serializable {
 
   /**
    * 
-   * Deletes eXo Calendar Event.
+   * Deletes eXo Calendar Event that corresponds to given appointment Id.
    * 
    * @param appointmentId
-   * @param folderId
    * @param username
    * @throws Exception
    */
-  protected void deleteEventByAppointmentID(String appointmentId, String username) throws Exception {
+  public void deleteEventByAppointmentID(String appointmentId, String username) throws Exception {
     CalendarEvent calendarEvent = getEventByAppointmentId(username, appointmentId);
     if (calendarEvent != null) {
       deleteEvent(username, calendarEvent);
@@ -65,12 +64,11 @@ public class ExoStorageService implements Serializable {
    * 
    * Deletes eXo Calendar Event.
    * 
-   * @param calendarEvent
-   * @param folderId
    * @param username
+   * @param calendarEvent
    * @throws Exception
    */
-  protected void deleteEvent(String username, CalendarEvent calendarEvent) throws Exception {
+  public void deleteEvent(String username, CalendarEvent calendarEvent) throws Exception {
     if (calendarEvent == null) {
       LOG.warn("Event is null, can't delete it for username: " + username);
       return;
@@ -104,27 +102,6 @@ public class ExoStorageService implements Serializable {
 
   /**
    * 
-   * Creates or updates eXo Calendar Event.
-   * 
-   * @param appointment
-   * @param folder
-   * @param username
-   * @throws Exception
-   */
-  protected List<CalendarEvent> createOrUpdateEvent(Appointment appointment, Folder folder, String username, TimeZone timeZone) throws Exception {
-    boolean isNew = correspondenceService.getCorrespondingId(username, appointment.getId().getUniqueId()) == null;
-    if (!isNew) {
-      CalendarEvent event = getEventByAppointmentId(username, appointment.getId().getUniqueId());
-      if (event == null) {
-        isNew = true;
-        correspondenceService.deleteCorrespondingId(username, appointment.getId().getUniqueId());
-      }
-    }
-    return createOrUpdateEvent(appointment, folder, username, isNew, timeZone);
-  }
-
-  /**
-   * 
    * Delete eXo Calendar.
    * 
    * @param username
@@ -132,7 +109,7 @@ public class ExoStorageService implements Serializable {
    * @return
    * @throws Exception
    */
-  protected boolean deleteCalendar(String username, String folderId) throws Exception {
+  public boolean deleteCalendar(String username, String folderId) throws Exception {
     String calendarId = correspondenceService.getCorrespondingId(username, folderId);
     if (calendarId == null) {
       calendarId = CalendarConverterService.getCalendarId(folderId);
@@ -154,7 +131,7 @@ public class ExoStorageService implements Serializable {
    * @return
    * @throws Exception
    */
-  protected Calendar getUserCalendar(String username, String folderId) throws Exception {
+  public Calendar getUserCalendar(String username, String folderId) throws Exception {
     return getUserCalendar(username, folderId, true);
   }
 
@@ -164,10 +141,11 @@ public class ExoStorageService implements Serializable {
    * 
    * @param username
    * @param folderId
+   * @param deleteIfCorrespondentExists
    * @return
    * @throws Exception
    */
-  protected Calendar getUserCalendar(String username, String folderId, boolean deleteIfCorrespondentExists) throws Exception {
+  public Calendar getUserCalendar(String username, String folderId, boolean deleteIfCorrespondentExists) throws Exception {
     String calendarId = correspondenceService.getCorrespondingId(username, folderId);
     Calendar calendar = null;
     if (calendarId != null) {
@@ -189,7 +167,7 @@ public class ExoStorageService implements Serializable {
    * @return
    * @throws Exception
    */
-  protected Calendar getOrCreateUserCalendar(String username, Folder folder) throws Exception {
+  public Calendar getOrCreateUserCalendar(String username, Folder folder) throws Exception {
     Calendar calendar = getUserCalendar(username, folder.getId().getUniqueId(), false);
     String calendarId = CalendarConverterService.getCalendarId(folder.getId().getUniqueId());
     if (calendar == null) {
@@ -226,7 +204,7 @@ public class ExoStorageService implements Serializable {
    * @return
    * @throws Exception
    */
-  protected List<CalendarEvent> getUserCalendarEvents(String username, String folderId) throws Exception {
+  public List<CalendarEvent> getUserCalendarEvents(String username, String folderId) throws Exception {
     List<CalendarEvent> userEvents = null;
     String calendarId = correspondenceService.getCorrespondingId(username, folderId);
     if (calendarId == null) {
@@ -251,8 +229,8 @@ public class ExoStorageService implements Serializable {
    * @param timeZone
    * @throws Exception
    */
-  protected List<CalendarEvent> updateEvent(Appointment appointment, Folder folder, String username, TimeZone timeZone) throws Exception {
-    return createOrUpdateEvent(appointment, folder, username, false, timeZone);
+  public List<CalendarEvent> updateEvent(Appointment appointment, String username, TimeZone timeZone) throws Exception {
+    return createOrUpdateEvent(appointment, username, false, timeZone);
   }
 
   /**
@@ -265,12 +243,133 @@ public class ExoStorageService implements Serializable {
    * @param timeZone
    * @throws Exception
    */
-  protected List<CalendarEvent> createEvent(Appointment appointment, Folder folder, String username, TimeZone timeZone) throws Exception {
-    return createOrUpdateEvent(appointment, folder, username, true, timeZone);
+  public List<CalendarEvent> createEvent(Appointment appointment, String username, TimeZone timeZone) throws Exception {
+    return createOrUpdateEvent(appointment, username, true, timeZone);
   }
 
-  private List<CalendarEvent> createOrUpdateEvent(Appointment appointment, Folder folder, String username, boolean isNew, TimeZone timeZone) throws Exception {
-    Calendar calendar = getUserCalendar(username, folder.getId().getUniqueId());
+  /**
+   * 
+   * Creates or updates eXo Calendar Event.
+   * 
+   * @param appointment
+   * @param folder
+   * @param username
+   * @param timeZone
+   * @return
+   * @throws Exception
+   */
+  public List<CalendarEvent> createOrUpdateEvent(Appointment appointment, String username, TimeZone timeZone) throws Exception {
+    boolean isNew = correspondenceService.getCorrespondingId(username, appointment.getId().getUniqueId()) == null;
+    if (!isNew) {
+      CalendarEvent event = getEventByAppointmentId(username, appointment.getId().getUniqueId());
+      if (event == null) {
+        isNew = true;
+        correspondenceService.deleteCorrespondingId(username, appointment.getId().getUniqueId());
+      }
+    }
+    return createOrUpdateEvent(appointment, username, isNew, timeZone);
+  }
+
+  /**
+   * 
+   * @param username
+   * @param appointmentId
+   * @return
+   * @throws Exception
+   */
+  public CalendarEvent getEventByAppointmentId(String username, String appointmentId) throws Exception {
+    String calEventId = correspondenceService.getCorrespondingId(username, appointmentId);
+    CalendarEvent event = storage.getEvent(username, calEventId);
+    if (event == null && calEventId != null) {
+      correspondenceService.deleteCorrespondingId(username, appointmentId);
+    }
+    return event;
+  }
+
+  /**
+   * 
+   * @param eventNode
+   * @return
+   * @throws Exception
+   */
+  public CalendarEvent getExoEventByNode(Node eventNode) throws Exception {
+    return storage.getEvent(eventNode);
+  }
+
+  /**
+   * 
+   * @param uuid
+   * @return
+   * @throws Exception
+   */
+  public String getExoEventMasterRecurenceByOriginalUUID(String uuid) throws Exception {
+    Node node = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(uuid);
+    if (node == null) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("No original recurrent node was found with UUID: " + uuid);
+      }
+      return null;
+    } else {
+      return node.getName();
+    }
+  }
+
+  /**
+   * 
+   * @param username
+   * @param calendar
+   * @return
+   * @throws Exception
+   */
+  public List<CalendarEvent> getAllExoEvents(String username, Calendar calendar) throws Exception {
+    List<String> calendarIds = Collections.singletonList(calendar.getId());
+    return storage.getUserEventByCalendar(username, calendarIds);
+  }
+
+  /**
+   * 
+   * @param username
+   * @param calendar
+   * @param date
+   * @return
+   * @throws Exception
+   */
+  public List<CalendarEvent> findExoEventsModifiedSince(String username, Calendar calendar, Date date) throws Exception {
+    List<CalendarEvent> resultEvents = new ArrayList<CalendarEvent>();
+    List<CalendarEvent> calendarEvents = getAllExoEvents(username, calendar);
+    for (CalendarEvent calendarEvent : calendarEvents) {
+      if (calendarEvent.getLastUpdatedTime() == null) {
+        continue;
+      }
+      if (calendarEvent.getLastUpdatedTime().after(date)) {
+        resultEvents.add(calendarEvent);
+      }
+    }
+    return resultEvents;
+  }
+
+  public void updateModifiedDateOfEvent(String username, CalendarEvent event) throws Exception {
+    Node node = storage.getCalendarEventNode(username, event.getCalType(), event.getCalendarId(), event.getId());
+    modifyUpdateDate(node);
+    if (event.getOriginalReference() != null && !event.getOriginalReference().isEmpty()) {
+      Node masterNode = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(event.getOriginalReference());
+      modifyUpdateDate(masterNode);
+    }
+  }
+
+  private void modifyUpdateDate(Node node) throws Exception {
+    if (!node.isNodeType("exo:datetime")) {
+      if (node.canAddMixin("exo:datetime")) {
+        node.addMixin("exo:datetime");
+      }
+      node.setProperty("exo:dateCreated", new GregorianCalendar());
+    }
+    node.setProperty("exo:dateModified", new GregorianCalendar());
+    node.save();
+  }
+
+  private List<CalendarEvent> createOrUpdateEvent(Appointment appointment, String username, boolean isNew, TimeZone timeZone) throws Exception {
+    Calendar calendar = getUserCalendar(username, appointment.getParentFolderId().getUniqueId());
     if (calendar == null) {
       LOG.warn("Attempting to synchronize an event without existing associated eXo Calendar.");
       return null;
@@ -379,89 +478,4 @@ public class ExoStorageService implements Serializable {
     return updatedEvents;
   }
 
-  /**
-   * 
-   * @param username
-   * @param appointmentId
-   * @return
-   * @throws Exception
-   */
-  public CalendarEvent getEventByAppointmentId(String username, String appointmentId) throws Exception {
-    String calEventId = correspondenceService.getCorrespondingId(username, appointmentId);
-    CalendarEvent event = storage.getEvent(username, calEventId);
-    if (event == null && calEventId != null) {
-      correspondenceService.deleteCorrespondingId(username, appointmentId);
-    }
-    return event;
-  }
-
-  /**
-   * 
-   * @param username
-   * @param calendar
-   * @return
-   * @throws Exception
-   */
-  public List<CalendarEvent> searchAllEvents(String username, Calendar calendar) throws Exception {
-    List<String> calendarIds = Collections.singletonList(calendar.getId());
-    return storage.getUserEventByCalendar(username, calendarIds);
-  }
-
-  /**
-   * 
-   * @param username
-   * @param calendar
-   * @param date
-   * @return
-   * @throws Exception
-   */
-  public List<CalendarEvent> searchEventsModifiedSince(String username, Calendar calendar, Date date) throws Exception {
-    List<CalendarEvent> resultEvents = new ArrayList<CalendarEvent>();
-    List<CalendarEvent> calendarEvents = searchAllEvents(username, calendar);
-    for (CalendarEvent calendarEvent : calendarEvents) {
-      if (calendarEvent.getLastUpdatedTime() == null) {
-        continue;
-      }
-      if (calendarEvent.getLastUpdatedTime().after(date)) {
-        resultEvents.add(calendarEvent);
-      }
-    }
-    return resultEvents;
-  }
-
-  public String getRecurrentEventIdByOriginalUUID(String uuid) throws Exception {
-    Node node = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(uuid);
-    if (node == null) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("No original recurrent node was found with UUID: " + uuid);
-      }
-      return null;
-    } else {
-      return node.getName();
-    }
-  }
-
-  public void updateModifiedDateOfEvent(String username, CalendarEvent event) throws Exception {
-    Node node = storage.getCalendarEventNode(username, event.getCalType(), event.getCalendarId(), event.getId());
-    modifyUpdateDate(node);
-    if (event.getOriginalReference() != null && !event.getOriginalReference().isEmpty()) {
-      Node masterNode = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(event.getOriginalReference());
-      modifyUpdateDate(masterNode);
-    }
-  }
-
-  private void modifyUpdateDate(Node node) throws Exception {
-    if (!node.isNodeType("exo:datetime")) {
-      if (node.canAddMixin("exo:datetime")) {
-        node.addMixin("exo:datetime");
-      }
-      node.setProperty("exo:dateCreated", new GregorianCalendar());
-    }
-    node.setProperty("exo:dateModified", new GregorianCalendar());
-    node.save();
-  }
-
-  public CalendarEvent getEvent(Node eventNode) throws Exception {
-    return storage.getEvent(eventNode);
-  }
 }

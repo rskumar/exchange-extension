@@ -40,21 +40,33 @@ public class CalendarDeleteAction implements Action {
           LOG.info("User '" + state.getIdentity().getUserId() + "' has no Exchange service, event will not be deleted from Exchange: eventId=" + eventId);
           return false;
         } else {
+          boolean started = false;
           try {
-            if (!integrationService.isSynchronizationStarted()) {
-              integrationService.setSynchronizationStarted();
-              if (integrationService.getUserExoLastCheckDate() != null) {
-                String calendarId = node.getProperty(Utils.CALENDAR_ID).getString();
-                integrationService.deleteExchangeCalendarEvent(eventId, calendarId);
-                integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
+            String calendarId = node.getProperty(Utils.EXO_CALENDAR_ID).getString();
+            if (integrationService.isCalendarSynchronizedWithExchange(calendarId)) {
+              // Test if synchronization task is started, if yes, don't take
+              // care about modifications to not corrupt data by cocurrent
+              // modifications.
+              if (!integrationService.isSynchronizationStarted()) {
+                integrationService.setSynchronizationStarted();
+                started = true;
+                if (integrationService.getUserExoLastCheckDate() != null) {
+                  integrationService.deleteExchangeCalendarEvent(eventId, calendarId);
+                  integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
+                }
+                integrationService.setSynchronizationStopped();
               }
-              integrationService.setSynchronizationStopped();
             }
           } catch (Exception e) {
             LOG.error("Error while deleting Exchange event: " + eventId, e);
             // Integration is out of sync, so disable auto synchronization
             // until the scheduled job runs and try to fix this
             integrationService.setUserExoLastCheckDate(0);
+          } finally {
+            // Set synchronization as finished if it was started here.
+            if (started) {
+              integrationService.setSynchronizationStopped();
+            }
           }
         }
       } catch (Exception e) {
@@ -63,5 +75,4 @@ public class CalendarDeleteAction implements Action {
     }
     return false;
   }
-
 }

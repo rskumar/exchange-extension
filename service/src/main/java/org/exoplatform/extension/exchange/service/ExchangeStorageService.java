@@ -19,6 +19,7 @@ import microsoft.exchange.webservices.data.FindFoldersResults;
 import microsoft.exchange.webservices.data.Folder;
 import microsoft.exchange.webservices.data.FolderId;
 import microsoft.exchange.webservices.data.FolderView;
+import microsoft.exchange.webservices.data.Item;
 import microsoft.exchange.webservices.data.ItemId;
 import microsoft.exchange.webservices.data.PropertySet;
 import microsoft.exchange.webservices.data.ServiceResponseException;
@@ -298,5 +299,83 @@ public class ExchangeStorageService implements Serializable {
     }
 
     return appointment;
+  }
+
+  /**
+   * 
+   * @param folderId
+   * @return Exchange Folder instance based on Exchange FolderId object
+   * @throws Exception
+   */
+  public CalendarFolder getExchangeCalendar(ExchangeService service, String folderId) throws Exception {
+    return getExchangeCalendar(service, FolderId.getFolderIdFromString(folderId));
+  }
+
+  /**
+   * 
+   * @param folderId
+   * @return Exchange Folder instance based on Exchange FolderId object
+   * @throws Exception
+   */
+  public CalendarFolder getExchangeCalendar(ExchangeService service, FolderId folderId) throws Exception {
+    CalendarFolder folder = null;
+    try {
+      folder = CalendarFolder.bind(service, folderId);
+    } catch (ServiceResponseException e) {
+      LOG.warn("Can't get Folder identified by id: " + folderId.getUniqueId());
+    }
+    return folder;
+  }
+
+  /**
+   * 
+   * @param folderId
+   * @return Exchange Folder instance based on Exchange FolderId object
+   * @throws Exception
+   */
+  public Appointment getAppointment(ExchangeService service, String appointmentId) throws Exception {
+    return getAppointment(service, ItemId.getItemIdFromString(appointmentId));
+  }
+
+  /**
+   * 
+   * @param folderId
+   * @return Exchange Folder instance based on Exchange FolderId object
+   * @throws Exception
+   */
+  public Appointment getAppointment(ExchangeService service, ItemId appointmentId) throws Exception {
+    Appointment appointment = null;
+    try {
+      appointment = Appointment.bind(service, appointmentId);
+    } catch (ServiceResponseException e) {
+      LOG.warn("Can't get Folder identified by id: " + appointmentId.getUniqueId());
+    }
+    return appointment;
+  }
+
+  /**
+   * 
+   * @param folderId
+   * @return Exchange Folder instance based on Exchange FolderId object
+   * @throws Exception
+   */
+  public Item getItem(ExchangeService service, String itemId) throws Exception {
+    return getItem(service, ItemId.getItemIdFromString(itemId));
+  }
+
+  /**
+   * 
+   * @param folderId
+   * @return Exchange Folder instance based on Exchange FolderId object
+   * @throws Exception
+   */
+  public Item getItem(ExchangeService service, ItemId itemId) throws Exception {
+    Item item = null;
+    try {
+      item = Item.bind(service, itemId);
+    } catch (ServiceResponseException e) {
+      LOG.warn("Can't get Folder identified by id: " + itemId.getUniqueId());
+    }
+    return item;
   }
 }

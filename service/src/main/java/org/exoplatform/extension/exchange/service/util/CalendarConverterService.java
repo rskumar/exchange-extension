@@ -80,8 +80,9 @@ public class CalendarConverterService {
    * @param event
    * @param appointment
    * @param username
+   * @param storage
+   * @param userHandler
    * @param timeZone
-   * @param calendarService
    * @throws Exception
    */
   public static void convertExchangeToExoEvent(CalendarEvent event, Appointment appointment, String username, JCRDataStorage storage, UserHandler userHandler, TimeZone timeZone) throws Exception {
@@ -119,8 +120,9 @@ public class CalendarConverterService {
    * @param event
    * @param appointment
    * @param username
+   * @param storage
+   * @param userHandler
    * @param timeZone
-   * @param calendarService
    * @throws Exception
    */
   public static void convertExchangeToExoMasterRecurringCalendarEvent(CalendarEvent event, Appointment appointment, String username, JCRDataStorage storage, UserHandler userHandler, TimeZone timeZone)
@@ -143,18 +145,6 @@ public class CalendarConverterService {
       }
     }
     if (recurrence.hasEnd()) {
-      // TODO: Set maximum hour, minutes and seconds in date: work around for a
-      // bug in eXo
-      // Calendar calendarEndDate = Calendar.getInstance();
-      // calendarEndDate.setTime(recurrence.getEndDate());
-      // calendarEndDate.add(Calendar.DATE, 1);
-      // calendarEndDate.set(Calendar.MINUTE,
-      // calendarEndDate.getMaximum(Calendar.MINUTE));
-      // calendarEndDate.set(Calendar.SECOND,
-      // calendarEndDate.getMaximum(Calendar.SECOND));
-      // calendarEndDate.set(Calendar.MILLISECOND,
-      // calendarEndDate.getMaximum(Calendar.MILLISECOND));
-      // event.setRepeatUntilDate(calendarEndDate.getTime());
       event.setRepeatUntilDate(getExoDateFromExchangeFormat(recurrence.getEndDate()));
     }
     if (recurrence.getNumberOfOccurrences() != null) {
@@ -170,10 +160,12 @@ public class CalendarConverterService {
    * @param masterEvent
    * @param updatedEvents
    *          empty list that will be updated by modified occurences
+   * @param appointmentIds
    * @param masterAppointment
    * @param username
+   * @param storage
+   * @param userHandler
    * @param timeZone
-   * @param calendarService
    * @return
    * @throws Exception
    */
@@ -228,46 +220,19 @@ public class CalendarConverterService {
     return calendarEvents;
   }
 
+  /**
+   * 
+   * @param event
+   *          eXo Calendar event
+   * @param item
+   *          Exchange item
+   * @return
+   * @throws Exception
+   */
   public static boolean verifyModifiedDatesConflict(CalendarEvent event, Appointment item) throws Exception {
     Date eventModifDate = CalendarConverterService.convertDateToUTC(event.getLastUpdatedTime());
     Date itemModifDate = item.getLastModifiedTime();
     return eventModifDate.getTime() >= itemModifDate.getTime();
-  }
-
-  private static CalendarEvent getOccurenceOfDate(String username, JCRDataStorage storage, CalendarEvent masterEvent, Date originalStart, TimeZone timeZone) throws Exception {
-    Date date = getExoDateFromExchangeFormat(originalStart);
-    String recurenceId = RECURRENCE_ID_FORMAT.format(date);
-    List<CalendarEvent> exceptionEvens = storage.getExceptionEvents(username, masterEvent);
-    for (CalendarEvent calendarEvent : exceptionEvens) {
-      if (calendarEvent.getRecurrenceId().equals(recurenceId)) {
-        return calendarEvent;
-      }
-    }
-
-    Calendar from = Calendar.getInstance(timeZone);
-    from.setTime(date);
-    from.set(Calendar.HOUR_OF_DAY, 0);
-    from.set(Calendar.MINUTE, 0);
-    from.set(Calendar.SECOND, 0);
-    from.set(Calendar.MILLISECOND, 0);
-
-    Calendar to = Calendar.getInstance(timeZone);
-    to.setTime(date);
-    to.set(Calendar.HOUR_OF_DAY, to.getActualMaximum(Calendar.HOUR_OF_DAY));
-    to.set(Calendar.MINUTE, to.getActualMaximum(Calendar.MINUTE));
-    to.set(Calendar.SECOND, to.getActualMaximum(Calendar.SECOND));
-    to.set(Calendar.MILLISECOND, to.getActualMaximum(Calendar.MILLISECOND));
-
-    Map<String, CalendarEvent> map = storage.getOccurrenceEvents(masterEvent, from, to, timeZone.getID());
-    CalendarEvent occEvent = null;
-    if (map != null && !map.isEmpty()) {
-      if (map.size() == 1) {
-        occEvent = map.values().iterator().next();
-      } else {
-        LOG.error("Error while deleting from eXo an occurence already deleted from Exchange '" + masterEvent.getSummary() + "' in date: '" + date + "'");
-      }
-    }
-    return occEvent;
   }
 
   /**
@@ -300,18 +265,6 @@ public class CalendarConverterService {
 
     // This have to be last thing to load because of BAD EWS API impl
     setApoinementSummary(appointment, calendarEvent);
-  }
-
-  private static void setAppointmentReminder(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
-    appointment.setIsReminderSet(false);
-    List<Reminder> reminders = calendarEvent.getReminders();
-    if (reminders != null) {
-      for (Reminder reminder : reminders) {
-        appointment.setIsReminderSet(true);
-        appointment.setReminderMinutesBeforeStart((int) reminder.getAlarmBefore());
-        appointment.setReminderDueBy(convertToDefaultTimeZoneFormat(reminder.getFromDateTime()));
-      }
-    }
   }
 
   /**
@@ -389,16 +342,6 @@ public class CalendarConverterService {
   public static void convertExoToExchangeOccurenceEvent(Appointment occAppointment, CalendarEvent occEvent, String username, UserHandler userHandler, TimeZoneDefinition serverTimeZoneDefinition,
       TimeZone userCalendarTimeZone) throws Exception {
     convertExoToExchangeEvent(occAppointment, occEvent, username, userHandler, serverTimeZoneDefinition, userCalendarTimeZone);
-  }
-
-  /**
-   * Converts Exchange Calendar Category Name to eXo Calendar Name
-   * 
-   * @param categoryName
-   * @return
-   */
-  private static String getCategoryName(String categoryName) {
-    return /* EXCHANGE_CALENDAR_NAME_PREFIX + "-" + */categoryName;
   }
 
   /**
@@ -492,6 +435,84 @@ public class CalendarConverterService {
     return UTC_DATE_FORMAT.parse(time);
   }
 
+  public static Date getExoDateFromExchangeFormat(Date date) {
+    int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
+
+    Calendar calendar = Calendar.getInstance();
+    calendar.setTime(date);
+    calendar.add(Calendar.MINUTE, exchangeOffset);
+
+    return calendar.getTime();
+  }
+
+  private static Date getExchangeDateFromExchangeFormat(Date date) {
+    int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
+
+    Calendar calendar = Calendar.getInstance();
+    calendar.setTime(date);
+    calendar.add(Calendar.MINUTE, -exchangeOffset);
+
+    return calendar.getTime();
+  }
+
+  private static CalendarEvent getOccurenceOfDate(String username, JCRDataStorage storage, CalendarEvent masterEvent, Date originalStart, TimeZone timeZone) throws Exception {
+    Date date = getExoDateFromExchangeFormat(originalStart);
+    String recurenceId = RECURRENCE_ID_FORMAT.format(date);
+    List<CalendarEvent> exceptionEvens = storage.getExceptionEvents(username, masterEvent);
+    for (CalendarEvent calendarEvent : exceptionEvens) {
+      if (calendarEvent.getRecurrenceId().equals(recurenceId)) {
+        return calendarEvent;
+      }
+    }
+
+    Calendar from = Calendar.getInstance(timeZone);
+    from.setTime(date);
+    from.set(Calendar.HOUR_OF_DAY, 0);
+    from.set(Calendar.MINUTE, 0);
+    from.set(Calendar.SECOND, 0);
+    from.set(Calendar.MILLISECOND, 0);
+
+    Calendar to = Calendar.getInstance(timeZone);
+    to.setTime(date);
+    to.set(Calendar.HOUR_OF_DAY, to.getActualMaximum(Calendar.HOUR_OF_DAY));
+    to.set(Calendar.MINUTE, to.getActualMaximum(Calendar.MINUTE));
+    to.set(Calendar.SECOND, to.getActualMaximum(Calendar.SECOND));
+    to.set(Calendar.MILLISECOND, to.getActualMaximum(Calendar.MILLISECOND));
+
+    Map<String, CalendarEvent> map = storage.getOccurrenceEvents(masterEvent, from, to, timeZone.getID());
+    CalendarEvent occEvent = null;
+    if (map != null && !map.isEmpty()) {
+      if (map.size() == 1) {
+        occEvent = map.values().iterator().next();
+      } else {
+        LOG.error("Error while deleting from eXo an occurence already deleted from Exchange '" + masterEvent.getSummary() + "' in date: '" + date + "'");
+      }
+    }
+    return occEvent;
+  }
+
+  private static void setAppointmentReminder(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
+    appointment.setIsReminderSet(false);
+    List<Reminder> reminders = calendarEvent.getReminders();
+    if (reminders != null) {
+      for (Reminder reminder : reminders) {
+        appointment.setIsReminderSet(true);
+        appointment.setReminderMinutesBeforeStart((int) reminder.getAlarmBefore());
+        appointment.setReminderDueBy(convertToDefaultTimeZoneFormat(reminder.getFromDateTime()));
+      }
+    }
+  }
+
+  /**
+   * Converts Exchange Calendar Category Name to eXo Calendar Name
+   * 
+   * @param categoryName
+   * @return
+   */
+  private static String getCategoryName(String categoryName) {
+    return /* EXCHANGE_CALENDAR_NAME_PREFIX + "-" + */categoryName;
+  }
+
   private static boolean isSameDate(java.util.Calendar date1, java.util.Calendar date2) {
     return (date1.get(java.util.Calendar.DATE) == date2.get(java.util.Calendar.DATE) && date1.get(java.util.Calendar.MONTH) == date2.get(java.util.Calendar.MONTH) && date1
         .get(java.util.Calendar.YEAR) == date2.get(java.util.Calendar.YEAR));
@@ -520,7 +541,16 @@ public class CalendarConverterService {
             attendees.add(attendee);
           }
         } catch (Exception e) {
-          LOG.error("Partacipant '" + partacipant + "' wasn't found in eXo Organization.");
+          Attendee attendee = null;
+          if (username.contains("@")) {
+            attendee = new Attendee(username.split("@")[0], username);
+          } else {
+            attendee = new Attendee(username, null);
+          }
+          attendees.add(attendee);
+          if (LOG.isTraceEnabled()) {
+            LOG.warn("Partacipant '" + partacipant + "' wasn't found in eXo Organization.");
+          }
         }
       }
     }
@@ -559,7 +589,11 @@ public class CalendarConverterService {
             if (LOG.isTraceEnabled()) {
               LOG.trace("Event partacipant was not found, email = " + attendee.getAddress());
             }
-            continue;
+            username = attendee.getAddress() == null ? attendee.getName() : attendee.getAddress();
+            if (username == null) {
+              LOG.warn("No user found for attendee: " + attendee);
+              continue;
+            }
           }
           participants.add(username);
         }
@@ -573,9 +607,13 @@ public class CalendarConverterService {
     try {
       ListAccess<User> listAccess = userHandler.findUsersByQuery(query);
       if (listAccess == null || listAccess.getSize() == 0) {
-        LOG.error("User with email '" + attendee.getAddress() + "' was not found in eXo, ignoring event participant.");
+        if (LOG.isTraceEnabled()) {
+          LOG.info("User with email '" + attendee.getAddress() + "' was not found in eXo.");
+        }
       } else if (listAccess.getSize() > 1) {
-        LOG.error("Multiple users have the same email adress: '" + attendee.getAddress() + "'.");
+        if (LOG.isTraceEnabled()) {
+          LOG.warn("Multiple users have the same email adress: '" + attendee.getAddress() + "'.");
+        }
       } else {
         username = listAccess.load(0, 1)[0].getUserName();
       }
@@ -675,26 +713,6 @@ public class CalendarConverterService {
       calendarEvent.setFromDateTime(convertToUserTimeZoneFormat(cal1.getTime(), timeZone));
       calendarEvent.setToDateTime(convertToUserTimeZoneFormat(cal2.getTime(), timeZone));
     }
-  }
-
-  public static Date getExchangeDateFromExchangeFormat(Date date) {
-    int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
-
-    Calendar calendar = Calendar.getInstance();
-    calendar.setTime(date);
-    calendar.add(Calendar.MINUTE, -exchangeOffset);
-
-    return calendar.getTime();
-  }
-
-  public static Date getExoDateFromExchangeFormat(Date date) {
-    int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
-
-    Calendar calendar = Calendar.getInstance();
-    calendar.setTime(date);
-    calendar.add(Calendar.MINUTE, exchangeOffset);
-
-    return calendar.getTime();
   }
 
   private static Date convertToDefaultTimeZoneFormat(Date date) {
