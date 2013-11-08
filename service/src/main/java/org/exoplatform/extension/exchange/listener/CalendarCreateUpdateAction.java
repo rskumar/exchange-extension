@@ -31,8 +31,12 @@ public class CalendarCreateUpdateAction implements Action {
     } else if (object instanceof Property) {
       Property property = (Property) object;
       node = property.getParent();
+      // This is to avoid making multiple update requests to exchange
+      if (!isNotLastPropertyToSet(node, property)) {
+        return false;
+      }
     }
-    if (node != null && node.isNodeType("exo:calendarEvent")) {
+    if (node != null && node.isNodeType("exo:calendarEvent") && isNodeValid(node)) {
       String eventId = node.getName();
       try {
         String userId = null;
@@ -55,21 +59,19 @@ public class CalendarCreateUpdateAction implements Action {
         } else {
           boolean started = false;
           try {
-            if (isNodeValid(node)) {
-              String calendarId = node.getProperty(Utils.EXO_CALENDAR_ID).getString();
-              if (integrationService.isCalendarSynchronizedWithExchange(calendarId)) {
-                // Test if synchronization task is started, if yes, don't take
-                // care about modifications to not corrupt data by cocurrent
-                // modifications.
-                if (!integrationService.isSynchronizationStarted()) {
-                  integrationService.setSynchronizationStarted();
-                  started = true;
-                  if (integrationService.getUserExoLastCheckDate() != null) {
-                    integrationService.updateOrCreateExchangeCalendarEvent(node);
-                    integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
-                  }
-                  integrationService.setSynchronizationStopped();
+            String calendarId = node.getProperty(Utils.EXO_CALENDAR_ID).getString();
+            if (integrationService.isCalendarSynchronizedWithExchange(calendarId)) {
+              // Test if synchronization task is started, if yes, don't take
+              // care about modifications to not corrupt data by cocurrent
+              // modifications.
+              if (!integrationService.isSynchronizationStarted()) {
+                integrationService.setSynchronizationStarted();
+                started = true;
+                if (integrationService.getUserExoLastCheckDate() != null) {
+                  integrationService.updateOrCreateExchangeCalendarEvent(node);
+                  integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
                 }
+                integrationService.setSynchronizationStopped();
               }
             }
           } catch (Exception e) {
@@ -93,8 +95,14 @@ public class CalendarCreateUpdateAction implements Action {
     return false;
   }
 
+  private boolean isNotLastPropertyToSet(Node node, Property property) throws Exception {
+    return (property.getName().equals(Utils.EXO_PARTICIPANT_STATUS) && !node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT))
+        || (node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) && (property.getName().equals(Utils.EXO_REPEAT_BYMONTHDAY) || property.getName().equals(Utils.EXO_REPEAT_FINISH_DATE)));
+  }
+
   private boolean isNodeValid(Node node) throws Exception {
-    return node.hasProperty(Utils.EXO_PARTICIPANT_STATUS);
+    return (node.hasProperty(Utils.EXO_PARTICIPANT_STATUS) && !node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT))
+        || (node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) && node.hasProperty(Utils.EXO_REPEAT_INTERVAL));
   }
 
 }

@@ -281,7 +281,7 @@ public class IntegrationService {
    * @throws Exception
    */
   public void deleteExchangeCalendarEvent(String eventId, String calendarId) throws Exception {
-    exchangeStorageService.deleteExchangeAppointment(username, service, eventId, calendarId);
+    exchangeStorageService.deleteAppointmentByExoEventId(username, service, eventId, calendarId);
   }
 
   /**
@@ -330,6 +330,9 @@ public class IntegrationService {
       for (FolderId folderId : folderIds) {
         // Test if not already fully synchronized
         if (!calendarFolderIds.contains(folderId)) {
+          // Delete eXo calendar and recreate it
+          exoStorageService.deleteCalendar(username, folderId.getUniqueId());
+
           updatedCalendarEventIds = synchronizeFullCalendar(folderId);
           calendarFolderIds.add(folderId);
         }
@@ -340,6 +343,9 @@ public class IntegrationService {
       for (FolderId folderId : synchronizedFolderIds) {
         // Test if not already fully synchronized
         if (!calendarFolderIds.contains(folderId)) {
+          // Delete eXo calendar and recreate it
+          exoStorageService.deleteCalendar(username, folderId.getUniqueId());
+
           updatedCalendarEventIds = synchronizeFullCalendar(folderId);
           calendarFolderIds.add(folderId);
         }
@@ -722,7 +728,7 @@ public class IntegrationService {
         continue;
       }
       Appointment appointment = exchangeStorageService.getAppointment(service, ItemId.getItemIdFromString(itemId));
-      if (appointment == null) {
+      if (appointment != null) {
         calendarEventsIterator.remove();
       }
     }

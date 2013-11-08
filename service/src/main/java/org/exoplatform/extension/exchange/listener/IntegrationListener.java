@@ -266,7 +266,7 @@ public class IntegrationListener implements Startable {
       this.firstSynchronization = true;
 
       ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP2, TimeZone.getDefault());
-      service.setPreAuthenticate(true);
+      service.setTimeout(20000);
       ExchangeCredentials credentials = new WebCredentials(username + "@" + exchangeDomain, password);
       service.setCredentials(credentials);
       service.setUrl(new URI(exchangeServerURL));

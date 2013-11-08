@@ -2,8 +2,6 @@ package org.exoplatform.extension.exchange.service;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.TimeZone;
@@ -116,7 +114,7 @@ public class ExchangeStorageService implements Serializable {
         // Exchange
         if (CalendarConverterService.isExchangeEventId(event.getId())) {
           LOG.error("Conflict in modification, inconsistant data, the event was deleted in Exchange but seems always in eXo, the event will be deleted from Exchange.");
-          deleteExchangeAppointment(username, service, event.getId(), event.getCalendarId());
+          deleteAppointmentByExoEventId(username, service, event.getId(), event.getCalendarId());
           return false;
         }
         appointment = new Appointment(service);
@@ -134,7 +132,6 @@ public class ExchangeStorageService implements Serializable {
           }
           isNew = false;
         }
-        // TODO make this exception occurence
         CalendarConverterService.convertExoToExchangeOccurenceEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone),
             userCalendarTimeZone);
       } else {
@@ -145,27 +142,37 @@ public class ExchangeStorageService implements Serializable {
           // Exchange
           if (CalendarConverterService.isExchangeEventId(event.getId())) {
             LOG.error("Conflict in modification, inconsistant data, the event was deleted in Exchange but seems always in eXo, the event will be deleted from Exchange.");
-            deleteExchangeAppointment(username, service, event.getId(), event.getCalendarId());
+            deleteAppointmentByExoEventId(username, service, event.getId(), event.getCalendarId());
             return false;
           }
           appointment = new Appointment(service);
         }
-        CalendarConverterService.convertExoToExchangeMasterRecurringCalendarEvent(appointment, event, username, organizationService.getUserHandler(),
+        List<Appointment> toDeleteOccurences = CalendarConverterService.convertExoToExchangeMasterRecurringCalendarEvent(appointment, event, username, organizationService.getUserHandler(),
             getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+
+        if (toDeleteOccurences != null && !toDeleteOccurences.isEmpty()) {
+          for (Appointment occAppointment : toDeleteOccurences) {
+            deleteAppointment(username, service, occAppointment.getId());
+          }
+        }
       }
     }
     if (isNew) {
       LOG.info("Create Exchange Appointment: " + event.getSummary());
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       appointment.save(folderId);
-    } else {
+      correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
+    } else /*
+            * test if appointment wasn't deleted by previous
+            * 'toDeleteOccurences' List
+            */if (correspondenceService.getCorrespondingId(username, event.getId()) != null) {
       LOG.info("Update Exchange Appointment: " + event.getSummary());
       appointment.update(ConflictResolutionMode.AlwaysOverwrite);
+      correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
     }
     if (eventsToUpdateModifiedTime != null) {
       eventsToUpdateModifiedTime.add(event);
     }
-    correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
     return false;
   }
 
@@ -177,7 +184,7 @@ public class ExchangeStorageService implements Serializable {
    * @param calendarId
    * @throws Exception
    */
-  public void deleteExchangeAppointment(String username, ExchangeService service, String eventId, String calendarId) throws Exception {
+  public void deleteAppointmentByExoEventId(String username, ExchangeService service, String eventId, String calendarId) throws Exception {
     String itemId = correspondenceService.getCorrespondingId(username, eventId);
     if (itemId == null) {
       if (LOG.isTraceEnabled()) {
@@ -187,20 +194,45 @@ public class ExchangeStorageService implements Serializable {
       // Verify that calendar is synchronized
       if (correspondenceService.getCorrespondingId(username, calendarId) == null) {
         LOG.warn("Calendar with id '" + calendarId + "' seems not synchronized with exchange.");
+
+        // delete correspondance for safe operations while sync is activated
+        correspondenceService.deleteCorrespondingId(username, eventId);
       } else {
-        Appointment appointment = null;
-        try {
-          appointment = Appointment.bind(service, ItemId.getItemIdFromString(itemId));
-          LOG.info("Delete Exchange appointment: " + appointment.getSubject());
-          appointment.delete(DeleteMode.HardDelete);
-        } catch (ServiceResponseException e) {
-          if (LOG.isTraceEnabled()) {
-            LOG.trace("Exchange Item was not bound, it was deleted or not yet created:" + eventId);
-          }
-        }
+        deleteAppointment(username, service, itemId);
       }
-      correspondenceService.deleteCorrespondingId(username, itemId, eventId);
     }
+  }
+
+  /**
+   * 
+   * @param username
+   * @param service
+   * @param itemId
+   * @throws Exception
+   */
+  public void deleteAppointment(String username, ExchangeService service, String itemId) throws Exception {
+    deleteAppointment(username, service, ItemId.getItemIdFromString(itemId));
+  }
+
+  /**
+   * 
+   * @param username
+   * @param service
+   * @param itemId
+   * @throws Exception
+   */
+  public void deleteAppointment(String username, ExchangeService service, ItemId itemId) throws Exception {
+    Appointment appointment = null;
+    try {
+      appointment = Appointment.bind(service, itemId);
+      LOG.info("Delete Exchange appointment: " + appointment.getSubject());
+      appointment.delete(DeleteMode.HardDelete);
+    } catch (ServiceResponseException e) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Exchange Item was not bound, it was deleted or not yet created:" + itemId);
+      }
+    }
+    correspondenceService.deleteCorrespondingId(username, itemId.getUniqueId());
   }
 
   /**
@@ -255,50 +287,8 @@ public class ExchangeStorageService implements Serializable {
   }
 
   private Appointment getAppointmentOccurence(ExchangeService service, String exchangeMasterId, String recurrenceId) throws Exception {
-    Appointment appointment = null;
-    ItemId exchangeMasterItemId = ItemId.getItemIdFromString(exchangeMasterId);
-    Date occDate = CalendarConverterService.RECURRENCE_ID_FORMAT.parse(recurrenceId);
-    {
-      Calendar calendar = Calendar.getInstance();
-      calendar.setTime(occDate);
-      calendar.set(Calendar.HOUR_OF_DAY, 0);
-      calendar.set(Calendar.MINUTE, 0);
-      calendar.set(Calendar.SECOND, 0);
-      calendar.set(Calendar.MILLISECOND, 0);
-      occDate = calendar.getTime();
-    }
-    Appointment masterAppointment = Appointment.bind(service, exchangeMasterItemId, new PropertySet(AppointmentSchema.Recurrence));
-
-    int i = 1;
-    Date endDate = masterAppointment.getRecurrence().getEndDate();
-    if (endDate != null && occDate.getTime() > endDate.getTime()) {
-      return null;
-    }
-
-    Calendar indexCalendar = Calendar.getInstance();
-    indexCalendar.setTime(masterAppointment.getRecurrence().getStartDate());
-
-    boolean continueSearch = true;
-    while (continueSearch) {
-      Appointment tmpAppointment = null;
-      try {
-        tmpAppointment = Appointment.bindToOccurrence(service, exchangeMasterItemId, i, new PropertySet(AppointmentSchema.Start));
-        Date date = CalendarConverterService.getExoDateFromExchangeFormat(tmpAppointment.getStart());
-        if (CalendarConverterService.isSameDate(occDate, date)) {
-          appointment = Appointment.bindToOccurrence(service, exchangeMasterItemId, i, new PropertySet(BasePropertySet.FirstClassProperties));
-          continueSearch = false;
-        }
-      } catch (Exception e) {
-        // Recurence not found, can be deleted from Exchange.
-      }
-      i++;
-      indexCalendar.add(Calendar.DATE, 1);
-      if (continueSearch && (occDate.before(indexCalendar.getTime()))) {
-        continueSearch = false;
-      }
-    }
-
-    return appointment;
+    Appointment masterAppointment = Appointment.bind(service, ItemId.getItemIdFromString(exchangeMasterId), new PropertySet(AppointmentSchema.Recurrence));
+    return CalendarConverterService.getAppointmentOccurence(masterAppointment, recurrenceId);
   }
 
   /**
@@ -348,7 +338,9 @@ public class ExchangeStorageService implements Serializable {
     try {
       appointment = Appointment.bind(service, appointmentId);
     } catch (ServiceResponseException e) {
-      LOG.warn("Can't get Folder identified by id: " + appointmentId.getUniqueId());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Can't get appointment identified by id: " + appointmentId.getUniqueId());
+      }
     }
     return appointment;
   }
@@ -374,7 +366,7 @@ public class ExchangeStorageService implements Serializable {
     try {
       item = Item.bind(service, itemId);
     } catch (ServiceResponseException e) {
-      LOG.warn("Can't get Folder identified by id: " + itemId.getUniqueId());
+      LOG.warn("Can't get item identified by id: " + itemId.getUniqueId());
     }
     return item;
   }

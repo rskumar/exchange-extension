@@ -67,7 +67,7 @@
 									<object
 										type="org.exoplatform.services.jcr.impl.ext.action.ActionConfiguration">
 										<field name="eventTypes">
-											<string>addNode,changeProperty,addProperty</string>
+											<string>addNode,changeProperty,addProperty,removeProperty</string>
 										</field>
 										<field name="nodeTypes">
 											<string>exo:calendarEvent</string>

@@ -144,7 +144,7 @@ public class CalendarConverterService {
         event.setRepeatInterval(((IntervalPattern) recurrence).getInterval());
       }
     }
-    if (recurrence.hasEnd()) {
+    if (recurrence.getEndDate() != null) {
       event.setRepeatUntilDate(getExoDateFromExchangeFormat(recurrence.getEndDate()));
     }
     if (recurrence.getNumberOfOccurrences() != null) {
@@ -276,10 +276,13 @@ public class CalendarConverterService {
    * @param appointment
    * @param username
    * @param calendarService
+   * @return list of occurences to delete
    * @throws Exception
    */
-  public static void convertExoToExchangeMasterRecurringCalendarEvent(Appointment appointment, CalendarEvent event, String username, UserHandler userHandler,
+  public static List<Appointment> convertExoToExchangeMasterRecurringCalendarEvent(Appointment appointment, CalendarEvent event, String username, UserHandler userHandler,
       TimeZoneDefinition serverTimeZoneDefinition, TimeZone userCalendarTimeZone) throws Exception {
+    List<Appointment> toDeleteOccurences = null;
+
     convertExoToExchangeEvent(appointment, event, username, userHandler, serverTimeZoneDefinition, userCalendarTimeZone);
 
     String repeatType = event.getRepeatType();
@@ -321,9 +324,38 @@ public class CalendarConverterService {
     }
 
     recurrence.setStartDate(event.getFromDateTime());
-    recurrence.setEndDate(getExchangeDateFromExchangeFormat(event.getRepeatUntilDate()));
+
+    if (event.getRepeatUntilDate() == null && event.getRepeatCount() < 1) {
+      recurrence.neverEnds();
+    } else if (event.getRepeatUntilDate() != null) {
+      recurrence.setEndDate(getExchangeDateFromExchangeFormat(event.getRepeatUntilDate()));
+    } else {
+      recurrence.setNumberOfOccurrences((int) event.getRepeatCount());
+    }
 
     appointment.setRecurrence(recurrence);
+
+    if (event.getExcludeId() != null && event.getExcludeId().length > 0) {
+      toDeleteOccurences = getDeletedOccurences(appointment, event, userCalendarTimeZone);
+
+      int nbOccurences = recurrence.getNumberOfOccurrences() == null ? 0 : recurrence.getNumberOfOccurrences();
+      int deletedAppointmentOccurences = 0;
+      try {
+        deletedAppointmentOccurences = appointment.getDeletedOccurrences().getCount();
+      } catch (Exception e) {
+        try {
+          appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(BasePropertySet.FirstClassProperties));
+          deletedAppointmentOccurences = appointment.getDeletedOccurrences().getCount();
+        } catch (Exception e2) {
+          deletedAppointmentOccurences = 0;
+        }
+      }
+      if ((nbOccurences - deletedAppointmentOccurences - toDeleteOccurences.size()) == 0) {
+        toDeleteOccurences.clear();
+        toDeleteOccurences.add(appointment);
+      }
+    }
+    return toDeleteOccurences;
   }
 
   /**
@@ -445,6 +477,53 @@ public class CalendarConverterService {
     return calendar.getTime();
   }
 
+  public static Appointment getAppointmentOccurence(Appointment masterAppointment, String recurrenceId) throws Exception {
+    Appointment appointment = null;
+    Date occDate = CalendarConverterService.RECURRENCE_ID_FORMAT.parse(recurrenceId);
+    {
+      Calendar calendar = Calendar.getInstance();
+      calendar.setTime(occDate);
+      calendar.set(Calendar.HOUR_OF_DAY, 0);
+      calendar.set(Calendar.MINUTE, 0);
+      calendar.set(Calendar.SECOND, 0);
+      calendar.set(Calendar.MILLISECOND, 0);
+      occDate = calendar.getTime();
+    }
+    int i = 1;
+    Date endDate = masterAppointment.getRecurrence().getEndDate();
+    if (endDate != null && occDate.getTime() > endDate.getTime()) {
+      return null;
+    }
+    Integer nbOccurences = masterAppointment.getRecurrence().getNumberOfOccurrences();
+
+    Calendar indexCalendar = Calendar.getInstance();
+    indexCalendar.setTime(masterAppointment.getRecurrence().getStartDate());
+
+    boolean continueSearch = true;
+    while (continueSearch && (nbOccurences == null || i <= nbOccurences)) {
+      Appointment tmpAppointment = null;
+      try {
+        tmpAppointment = Appointment.bindToOccurrence(masterAppointment.getService(), masterAppointment.getId(), i, new PropertySet(AppointmentSchema.Start));
+        Date date = CalendarConverterService.getExoDateFromExchangeFormat(tmpAppointment.getStart());
+        if (CalendarConverterService.isSameDate(occDate, date)) {
+          appointment = Appointment.bindToOccurrence(masterAppointment.getService(), masterAppointment.getId(), i, new PropertySet(BasePropertySet.FirstClassProperties));
+          continueSearch = false;
+        }
+        indexCalendar.setTime(date);
+      } catch (Exception e) {
+        // Recurence not found, can be deleted from Exchange.
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Error while getting occurence: " + recurrenceId + " of master appointment : " + masterAppointment.getSubject(), e);
+        }
+      }
+      if (continueSearch && (occDate.before(indexCalendar.getTime()) || (endDate != null && indexCalendar.getTime().after(endDate)))) {
+        continueSearch = false;
+      }
+      i++;
+    }
+    return appointment;
+  }
+
   private static Date getExchangeDateFromExchangeFormat(Date date) {
     int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
 
@@ -501,6 +580,21 @@ public class CalendarConverterService {
         appointment.setReminderDueBy(convertToDefaultTimeZoneFormat(reminder.getFromDateTime()));
       }
     }
+  }
+
+  private static List<Appointment> getDeletedOccurences(Appointment masterAppointment, CalendarEvent event, TimeZone userCalendarTimeZone) throws Exception {
+    List<Appointment> toDeleteOccurence = new ArrayList<Appointment>();
+    String[] excludedRecurenceIds = event.getExcludeId();
+    for (String excludedRecurenceId : excludedRecurenceIds) {
+      if (excludedRecurenceId.isEmpty()) {
+        continue;
+      }
+      Appointment occAppointment = getAppointmentOccurence(masterAppointment, excludedRecurenceId);
+      if (occAppointment != null) {
+        toDeleteOccurence.add(occAppointment);
+      }
+    }
+    return toDeleteOccurence;
   }
 
   /**

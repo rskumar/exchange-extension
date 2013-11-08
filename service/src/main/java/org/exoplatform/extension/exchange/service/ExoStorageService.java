@@ -80,24 +80,19 @@ public class ExoStorageService implements Serializable {
       storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
-    } else if ((calendarEvent.getRecurrenceId() != null && !calendarEvent.getRecurrenceId().isEmpty())
-        || (calendarEvent.getIsExceptionOccurrence() != null && calendarEvent.getIsExceptionOccurrence())) {
+    } else if (calendarEvent.getIsExceptionOccurrence() != null && !calendarEvent.getIsExceptionOccurrence()) {
       LOG.info("Delete user calendar event occurence: " + calendarEvent.getSummary() + ", id=" + calendarEvent.getRecurrenceId());
+      storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
+      correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
+    } else if (calendarEvent.getRecurrenceId() != null && !calendarEvent.getRecurrenceId().isEmpty()) {
+      LOG.info("Delete user calendar event occurence from series: " + calendarEvent.getSummary() + " with id : " + calendarEvent.getRecurrenceId());
       storage.removeOccurrenceInstance(username, calendarEvent);
-      if (storage.getEvent(username, calendarEvent.getId()) != null) {
-        storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
-      }
-      if (calendarEvent.getIsExceptionOccurrence() != null && calendarEvent.getIsExceptionOccurrence()) {
-        // Remove correspondence between exo and exchange IDs
-        correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
-      }
     } else {
       LOG.info("Delete user calendar event series: " + calendarEvent.getSummary());
       storage.removeRecurrenceSeries(username, calendarEvent);
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     }
-
   }
 
   /**
@@ -114,10 +109,14 @@ public class ExoStorageService implements Serializable {
     if (calendarId == null) {
       calendarId = CalendarConverterService.getCalendarId(folderId);
     }
-    Calendar calendar = storage.removeUserCalendar(username, calendarId);
-    if (calendar != null) {
-      LOG.info("User Calendar" + calendar.getName() + " is deleted, because it was deleted from Exchange.");
+    List<CalendarEvent> events = getUserCalendarEvents(username, folderId);
+    if (events == null) {
+      return false;
     }
+    for (CalendarEvent calendarEvent : events) {
+      correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
+    }
+    storage.removeUserCalendar(username, calendarId);
     correspondenceService.deleteCorrespondingId(username, folderId, calendarId);
     return true;
   }
