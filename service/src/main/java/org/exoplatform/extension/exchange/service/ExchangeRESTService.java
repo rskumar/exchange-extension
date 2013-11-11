@@ -152,7 +152,7 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
       IntegrationService.setUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE, settings.getPassword());
 
       integrationListener.userLoggedOut(username);
-      integrationListener.userLoggedIn(settings.getUsername(), settings.getPassword(), settings.getDomainName(), settings.getServerName());
+      integrationListener.userLoggedIn(username, settings.getUsername(), settings.getPassword(), settings.getDomainName(), settings.getServerName());
 
       return Response.ok().cacheControl(cc).build();
     } catch (Exception e) {

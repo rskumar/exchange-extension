@@ -3,7 +3,7 @@ function addExchangeButton() {
 	if(!separatorLineElement || separatorLineElement.length == 0) {
 		return;
 	}
-	separatorLineElement.before("<a href='#' class='ExchangeSettingsButton pull-right'><img src='/exchange-resources/skin/images/exchange.png' width='24px' height='24px'/></a>");
+	separatorLineElement.before("<a href='#' class='ExchangeSettingsButton pull-right'><img src='/exchange-resources/skin/images/exchange-disabled.png' width='24px' height='24px'/></a>");
 	$('.ExchangeSettingsButton').click(function(e) {
 		$(".ExchangeEditSettingsButton").removeAttr("disabled");
 		

@@ -154,12 +154,12 @@ public class IntegrationListener implements Startable {
       String exchangeStoredServerName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
       String exchangeStoredDomainName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
       String exchangeStoredPassword = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE);
-      userLoggedIn(exchangeStoredUsername, exchangeStoredPassword, exchangeStoredDomainName, exchangeStoredServerName);
+      userLoggedIn(username, exchangeStoredUsername, exchangeStoredPassword, exchangeStoredDomainName, exchangeStoredServerName);
     } else if (exchangeDomain != null && exchangeServerURL != null) {
       if (LOG.isTraceEnabled()) {
         LOG.trace("Exchange Synchronization Service: User '" + username + "' have not yet set parameters, use default Exchange server settings.");
       }
-      userLoggedIn(username, password, exchangeDomain, exchangeServerURL);
+      userLoggedIn(username, username, password, exchangeDomain, exchangeServerURL);
     } else {
       LOG.warn("Exchange Service is unvailable, please set parameters.");
     }
@@ -174,7 +174,7 @@ public class IntegrationListener implements Startable {
    * @param exchangeDomain
    * @param exchangeServerURL
    */
-  public void userLoggedIn(final String username, final String password, String exchangeDomain, String exchangeServerURL) {
+  public void userLoggedIn(final String username, final String exchangeUsername, final String password, String exchangeDomain, String exchangeServerURL) {
     try {
       Identity identity = identityRegistry.getIdentity(username);
       if (identity == null || identity.getUserId().equals(IdentityConstants.ANONIM)) {
@@ -186,7 +186,7 @@ public class IntegrationListener implements Startable {
       closeTaskIfExists(username);
 
       // Scheduled task: listen the changes made on MS Exchange Calendar
-      Thread schedulerCommand = new ExchangeIntegrationTask(identity, password, exchangeDomain, exchangeServerURL);
+      Thread schedulerCommand = new ExchangeIntegrationTask(identity, exchangeUsername, password, exchangeDomain, exchangeServerURL);
       ScheduledFuture<?> future = scheduledExecutor.scheduleWithFixedDelay(schedulerCommand, 10, schedulerDelayInSeconds, TimeUnit.SECONDS);
 
       // Add future task to the map to destroy thread when the user logout
@@ -260,14 +260,14 @@ public class IntegrationListener implements Startable {
     private ConversationState state;
     private boolean firstSynchronization;
 
-    public ExchangeIntegrationTask(Identity identity, String password, String exchangeDomain, String exchangeServerURL) throws Exception {
+    public ExchangeIntegrationTask(Identity identity, String exchangeUsername, String exchangePassword, String exchangeDomain, String exchangeServerURL) throws Exception {
       super("ExchangeIntegrationTask-" + (threadIndex++));
       this.username = identity.getUserId();
       this.firstSynchronization = true;
 
       ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP2, TimeZone.getDefault());
       service.setTimeout(20000);
-      ExchangeCredentials credentials = new WebCredentials(username + "@" + exchangeDomain, password);
+      ExchangeCredentials credentials = new WebCredentials(exchangeUsername + "@" + exchangeDomain, exchangePassword);
       service.setCredentials(credentials);
       service.setUrl(new URI(exchangeServerURL));
 
