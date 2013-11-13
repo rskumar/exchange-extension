@@ -230,6 +230,11 @@ public class CalendarConverterService {
    * @throws Exception
    */
   public static boolean verifyModifiedDatesConflict(CalendarEvent event, Appointment item) throws Exception {
+    if (event.getLastUpdatedTime() == null) {
+      return false;
+    } else if (item.getLastModifiedTime() == null) {
+      return true;
+    }
     Date eventModifDate = CalendarConverterService.convertDateToUTC(event.getLastUpdatedTime());
     Date itemModifDate = item.getLastModifiedTime();
     return eventModifDate.getTime() >= itemModifDate.getTime();
