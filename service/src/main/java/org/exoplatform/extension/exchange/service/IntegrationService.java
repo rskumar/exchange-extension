@@ -142,7 +142,7 @@ public class IntegrationService {
     // Serach modified eXo Calendar events since this date, this is used to
     // force synchronization
     Date exoLastSyncDate = getUserExoLastCheckDate();
-    if (exoLastSyncDate == null) {
+    if (exoLastSyncDate == null || exoLastSyncDate.before(lastSyncDate)) {
       exoLastSyncDate = lastSyncDate;
     }
 
@@ -333,7 +333,15 @@ public class IntegrationService {
           // Delete eXo calendar and recreate it
           exoStorageService.deleteCalendar(username, folderId.getUniqueId());
 
-          updatedCalendarEventIds = synchronizeFullCalendar(folderId);
+          List<String> tmpUpdatedCalendarEventIds = synchronizeFullCalendar(folderId);
+          if (tmpUpdatedCalendarEventIds != null && !tmpUpdatedCalendarEventIds.isEmpty()) {
+            if (updatedCalendarEventIds == null) {
+              updatedCalendarEventIds = tmpUpdatedCalendarEventIds;
+            } else {
+              updatedCalendarEventIds.addAll(tmpUpdatedCalendarEventIds);
+            }
+          }
+
           calendarFolderIds.add(folderId);
         }
       }
@@ -346,7 +354,15 @@ public class IntegrationService {
           // Delete eXo calendar and recreate it
           exoStorageService.deleteCalendar(username, folderId.getUniqueId());
 
-          updatedCalendarEventIds = synchronizeFullCalendar(folderId);
+          List<String> tmpUpdatedCalendarEventIds = synchronizeFullCalendar(folderId);
+          if (tmpUpdatedCalendarEventIds != null && !tmpUpdatedCalendarEventIds.isEmpty()) {
+            if (updatedCalendarEventIds == null) {
+              updatedCalendarEventIds = tmpUpdatedCalendarEventIds;
+            } else {
+              updatedCalendarEventIds.addAll(tmpUpdatedCalendarEventIds);
+            }
+          }
+
           calendarFolderIds.add(folderId);
         }
       }

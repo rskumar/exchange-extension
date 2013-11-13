@@ -152,7 +152,11 @@ public class ExchangeStorageService implements Serializable {
 
         if (toDeleteOccurences != null && !toDeleteOccurences.isEmpty()) {
           for (Appointment occAppointment : toDeleteOccurences) {
-            deleteAppointment(username, service, occAppointment.getId());
+            // Verify if deleted occurences is an exception existing occurence or not
+            String exoId = correspondenceService.getCorrespondingId(username, occAppointment.getId().getUniqueId());
+            if (exoId == null) {
+              deleteAppointment(username, service, occAppointment.getId());
+            }
           }
         }
       }

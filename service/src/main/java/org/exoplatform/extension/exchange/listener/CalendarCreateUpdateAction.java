@@ -1,9 +1,12 @@
 package org.exoplatform.extension.exchange.listener;
 
+import java.util.GregorianCalendar;
+
 import javax.jcr.Node;
 import javax.jcr.Property;
 
 import org.apache.commons.chain.Context;
+import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.Utils;
 import org.exoplatform.extension.exchange.service.IntegrationService;
 import org.exoplatform.services.command.action.Action;
@@ -69,6 +72,7 @@ public class CalendarCreateUpdateAction implements Action {
                 started = true;
                 if (integrationService.getUserExoLastCheckDate() != null) {
                   integrationService.updateOrCreateExchangeCalendarEvent(node);
+                  modifyUpdateDate(node);
                   integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
                 }
                 integrationService.setSynchronizationStopped();
@@ -95,8 +99,19 @@ public class CalendarCreateUpdateAction implements Action {
     return false;
   }
 
+  private void modifyUpdateDate(Node node) throws Exception {
+    if (!node.isNodeType("exo:datetime")) {
+      if (node.canAddMixin("exo:datetime")) {
+        node.addMixin("exo:datetime");
+      }
+      node.setProperty("exo:dateCreated", new GregorianCalendar());
+    }
+    node.setProperty("exo:dateModified", new GregorianCalendar());
+  }
+
   private boolean isNotLastPropertyToSet(Node node, Property property) throws Exception {
-    return (property.getName().equals(Utils.EXO_PARTICIPANT_STATUS) && !node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT))
+    return (property.getName().equals(Utils.EXO_PARTICIPANT_STATUS) && (!node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) || (node.hasProperty(Utils.EXO_REPEAT) && node.getProperty(Utils.EXO_REPEAT)
+        .getString().equals(CalendarEvent.RP_NOREPEAT))))
         || (node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) && (property.getName().equals(Utils.EXO_REPEAT_BYMONTHDAY) || property.getName().equals(Utils.EXO_REPEAT_FINISH_DATE)));
   }
 

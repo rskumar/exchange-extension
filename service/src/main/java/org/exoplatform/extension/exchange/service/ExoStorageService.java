@@ -185,7 +185,8 @@ public class ExoStorageService implements Serializable {
       calendar.setCalendarOwner(username);
       calendar.setDataInit(false);
       calendar.setEditPermission(new String[] { "any read" });
-      calendar.setCalendarColor(Calendar.COLORS[9]);
+      calendar.setCalendarColor(Calendar.COLORS[(int) (Math.random() * Calendar.COLORS.length)]);
+
       storage.saveUserCalendar(username, calendar, true);
 
       // Set IDs correspondence
@@ -426,6 +427,7 @@ public class ExoStorageService implements Serializable {
           if (LOG.isTraceEnabled()) {
             LOG.trace("Attempting to update eXo Event with Exchange Event, but modification date of eXo is after, ignore updating.");
           }
+          return updatedEvents;
         } else {
           if (isNew) {
             LOG.info("Create recurrent user calendar event: " + appointment.getSubject());
