@@ -39,6 +39,8 @@ function addExchangeButton() {
 	$.getJSON("/portal/rest/exchange/calendars", function(data){
     	if(!data || data.length == 0) {
 			$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange-disabled.png');
+		} else {
+			$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange.png');
 		}
 	});
 
