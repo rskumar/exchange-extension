@@ -211,7 +211,7 @@ public class IntegrationListener implements Startable {
   }
 
   private void closeTaskIfExists(String username) {
-    ScheduledFuture<?> future = futures.get(username);
+    ScheduledFuture<?> future = futures.remove(username);
     if (future != null) {
       future.cancel(true);
       IntegrationService integrationService = IntegrationService.getInstance(username);
@@ -353,10 +353,10 @@ public class IntegrationListener implements Startable {
 
     private void waitOtherTasks() {
       int i = 0;
-      while (integrationService.isSynchronizationStarted() && i < 30) {
+      while (integrationService.isSynchronizationStarted() && i < 10) {
         LOG.info("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'" + username + "'.");
         try {
-          Thread.sleep(1000);
+          Thread.sleep(5000);
         } catch (Exception e) {
           LOG.warn(e.getMessage());
         }

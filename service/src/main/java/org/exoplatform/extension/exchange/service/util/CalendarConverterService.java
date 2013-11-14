@@ -520,11 +520,13 @@ public class CalendarConverterService {
         if (LOG.isDebugEnabled()) {
           LOG.debug("Error while getting occurence: " + recurrenceId + " of master appointment : " + masterAppointment.getSubject(), e);
         }
+        // increment date
+        indexCalendar.add(Calendar.DATE, 1);
       }
+      i++;
       if (continueSearch && (occDate.before(indexCalendar.getTime()) || (endDate != null && indexCalendar.getTime().after(endDate)))) {
         continueSearch = false;
       }
-      i++;
     }
     return appointment;
   }

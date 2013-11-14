@@ -70,8 +70,9 @@ public class CorrespondenceService implements Serializable {
     String oldExoId = getCorrespondingId(username, exchangeId);
     String oldExchangeId = getCorrespondingId(username, exoId);
     if ((oldExoId != null && !oldExoId.equals(exoId)) || (oldExchangeId != null && !oldExchangeId.equals(exchangeId))) {
-      LOG.error("Exchange integration, correspondence service : An old existing ID will be replaced by another one.");
-
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Exchange integration, correspondence service : An old existing ID will be replaced by another one.");
+      }
       // Make sure no duplicated entry
       deleteCorrespondingId(username, exchangeId, exoId);
     }

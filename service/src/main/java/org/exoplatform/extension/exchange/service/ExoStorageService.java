@@ -80,8 +80,8 @@ public class ExoStorageService implements Serializable {
       storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
-    } else if (calendarEvent.getIsExceptionOccurrence() != null && !calendarEvent.getIsExceptionOccurrence()) {
-      LOG.info("Delete user calendar event occurence: " + calendarEvent.getSummary() + ", id=" + calendarEvent.getRecurrenceId());
+    } else if (calendarEvent.getIsExceptionOccurrence() != null && calendarEvent.getIsExceptionOccurrence()) {
+      LOG.info("Delete user calendar event exceptional occurence: " + calendarEvent.getSummary() + ", id=" + calendarEvent.getRecurrenceId());
       storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     } else if (calendarEvent.getRecurrenceId() != null && !calendarEvent.getRecurrenceId().isEmpty()) {

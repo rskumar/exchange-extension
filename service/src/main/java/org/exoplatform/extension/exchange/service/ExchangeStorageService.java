@@ -125,12 +125,13 @@ public class ExchangeStorageService implements Serializable {
       if ((event.getRecurrenceId() != null && !event.getRecurrenceId().isEmpty()) || (event.getIsExceptionOccurrence() != null && event.getIsExceptionOccurrence())) {
         if (isNew) {
           String exchangeMasterId = correspondenceService.getCorrespondingId(username, exoMasterId);
-          appointment = getAppointmentOccurence(service, exchangeMasterId, event.getRecurrenceId());
-          if (appointment == null) {
-            LOG.error("Cannot find Appointment occurence '" + event.getSummary() + "' with recurenceId: " + event.getRecurrenceId() + ", delete event.");
-            return true;
+          Appointment tmpAppointment = getAppointmentOccurence(service, exchangeMasterId, event.getRecurrenceId());
+          if (tmpAppointment != null) {
+            appointment = tmpAppointment;
+            isNew = false;
+          } else {
+            appointment = new Appointment(service);
           }
-          isNew = false;
         }
         CalendarConverterService.convertExoToExchangeOccurenceEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone),
             userCalendarTimeZone);
@@ -138,8 +139,7 @@ public class ExchangeStorageService implements Serializable {
         if (isNew) {
           // Checks if this event was already in Exchange, if it's the case, it
           // means that the item was not found because the user has removed it
-          // from
-          // Exchange
+          // from Exchange
           if (CalendarConverterService.isExchangeEventId(event.getId())) {
             LOG.error("Conflict in modification, inconsistant data, the event was deleted in Exchange but seems always in eXo, the event will be deleted from Exchange.");
             deleteAppointmentByExoEventId(username, service, event.getId(), event.getCalendarId());
@@ -152,7 +152,8 @@ public class ExchangeStorageService implements Serializable {
 
         if (toDeleteOccurences != null && !toDeleteOccurences.isEmpty()) {
           for (Appointment occAppointment : toDeleteOccurences) {
-            // Verify if deleted occurences is an exception existing occurence or not
+            // Verify if deleted occurences is an exception existing occurence
+            // or not
             String exoId = correspondenceService.getCorrespondingId(username, occAppointment.getId().getUniqueId());
             if (exoId == null) {
               deleteAppointment(username, service, occAppointment.getId());

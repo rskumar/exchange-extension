@@ -22,7 +22,7 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
   private String username = null;
 
   public ExchangeIntegrationLoginModule() {
-    getExchangeListenerService();
+    super();
   }
 
   @Override

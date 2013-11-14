@@ -234,8 +234,10 @@ public class IntegrationService {
       List<CalendarEvent> calendarEventsToUpdateModifiedTime = new ArrayList<CalendarEvent>();
       updateOrCreateExchangeCalendarEvent(event, calendarEventsToUpdateModifiedTime);
       if (!calendarEventsToUpdateModifiedTime.isEmpty()) {
-        // This is done to not have a cyclic updates between eXo and Exchange
-        exoStorageService.updateModifiedDateOfEvent(username, event);
+        for (CalendarEvent calendarEvent : calendarEventsToUpdateModifiedTime) {
+          // This is done to not have a cyclic updates between eXo and Exchange
+          exoStorageService.updateModifiedDateOfEvent(username, calendarEvent);
+        }
       }
     }
   }
