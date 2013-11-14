@@ -10,9 +10,18 @@
 	<dependencySets>
 		<dependencySet>
 			<outputDirectory>lib</outputDirectory>
+			<outputFileNameMapping>${artifact.artifactId}.${artifact.extension}</outputFileNameMapping>
 			<includes>
 				<include>${project.groupId}:exchange-extension-*:jar</include>
 				<include>jcifs:jcifs:jar</include>
+			</includes>
+			<scope>provided</scope>
+		</dependencySet>
+		<dependencySet>
+			<outputDirectory>webapps</outputDirectory>
+			<outputFileNameMapping>${artifact.artifactId}.${artifact.extension}</outputFileNameMapping>
+			<includes>
+				<include>${project.groupId}:exchange-resources:war</include>
 			</includes>
 			<scope>provided</scope>
 		</dependencySet>

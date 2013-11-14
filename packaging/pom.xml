@@ -20,6 +20,13 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>exchange-resources</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
 			<groupId>jcifs</groupId>
 			<artifactId>jcifs</artifactId>
 		</dependency>
